@@ -1,0 +1,6 @@
+{
+  "name": "Roxou Mobilidade",
+  "description": "Plataforma de mobilidade urbana negociada focada em Presidente Prudente/SP. Conecte passageiros e motoristas independentes com valores justos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
