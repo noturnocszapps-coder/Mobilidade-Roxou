@@ -86,7 +86,7 @@ fun CompensaScreen(
         mutableDoubleStateOf(inicial.buscaMaximaKm.coerceIn(0.0, 15.0))
     }
     var custoPorKm by remember(inicial) {
-        mutableLongStateOf(inicial.custoPorKmCentavos.coerceIn(10L, 150L))
+        mutableLongStateOf(inicial.custoPorKmCentavos.coerceIn(10L, 300L))
     }
     var bairrosEvitados by remember(inicial) {
         mutableStateOf(inicial.bairrosEvitados)
@@ -251,10 +251,10 @@ fun CompensaScreen(
                             rotulo = "Custo por km",
                             valorTexto = formatarReaisPreciso(custoPorKm),
                             value = custoPorKm.toFloat(),
-                            valueRange = 10f..150f,
-                            steps = 27,
+                            valueRange = 10f..300f,
+                            steps = 57,
                             onValueChange = { raw ->
-                                custoPorKm = ((raw / 5f).roundToInt() * 5L).coerceIn(10L, 150L)
+                                custoPorKm = ((raw / 5f).roundToInt() * 5L).coerceIn(10L, 300L)
                             },
                         )
                     }

@@ -69,6 +69,7 @@ class OfferTest {
         assertEquals(17, o.tripMinutes)
         assertEquals("Rua Junqueira Freire, 176, Álvares Machado", o.pickupAddress)
         assertEquals("Rua Prof. Hugo Mielli, 362, Vila Charlote", o.dropoffAddress)
+        assertEquals(4.88, o.passengerRating!!, 1e-9)
     }
 
     @Test fun le_oferta_da_uber() {
@@ -80,6 +81,7 @@ class OfferTest {
         assertEquals(14, o.tripMinutes)
         assertEquals("R. Luiz Antonio Chelse, Presidente Prudente", o.pickupAddress)
         assertEquals("Av. Washington Luiz, 875, Presidente Prudente", o.dropoffAddress)
+        assertEquals(5.0, o.passengerRating!!, 1e-9)
     }
 
     @Test fun tela_sem_oferta_nao_vira_oferta() {

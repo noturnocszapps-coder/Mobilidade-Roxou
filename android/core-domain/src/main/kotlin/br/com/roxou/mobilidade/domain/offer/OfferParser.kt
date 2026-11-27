@@ -21,6 +21,8 @@ data class ParsedOffer(
     val tripMinutes: Int,
     val pickupAddress: String? = null,
     val dropoffAddress: String? = null,
+    /** Nota do passageiro (ex.: 4,88), quando aparece no cartão. */
+    val passengerRating: Double? = null,
 ) {
     /** Chave para não mostrar a mesma oferta duas vezes. */
     val key: String get() = "$platform|$fareCents|$pickupKm|$tripKm|$tripMinutes"
@@ -42,6 +44,15 @@ object OfferParser {
     private val notAddress = Regex(
         """(?i)tenho interesse|aceitar|recusar|selecionar|pgto|pagamento|corridas|verificado|perfil|\bR\$""",
     )
+
+    private val ratingNumber = Regex("""(?<![\d.,])([1-5][.,]\d{2})(?![\d.,])""")
+    private val ratingHint = Regex("""(?i)corrida|\(\s*\d+\s*\)|^\s*[*★☆tk+]\s""")
+
+    /** Nota do passageiro: "t 4,88 986 corridas" (99), "4,87 · 31 corridas", "* 5,00 (48)" (Uber). */
+    fun findRating(lines: List<OcrLine>): Double? = lines.asSequence()
+        .filter { !it.text.contains("R$") && !it.text.contains("%") && ratingHint.containsMatchIn(it.text) }
+        .mapNotNull { ratingNumber.find(it.text)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull() }
+        .firstOrNull { it in 1.0..5.0 }
 
     fun parse(lines: List<OcrLine>, platform: Platform): ParsedOffer? {
         val sorted = lines.filter { it.text.isNotBlank() }.sortedBy { it.top }
@@ -80,6 +91,7 @@ object OfferParser {
             tripMinutes = trip.second,
             pickupAddress = joinAddress(pickupAddr),
             dropoffAddress = joinAddress(dropAddr),
+            passengerRating = findRating(sorted.filter { it.top < pickupLine.top }),
         )
     }
 

@@ -16,15 +16,16 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import br.com.roxou.mobilidade.domain.offer.OfferEvaluation
-import br.com.roxou.mobilidade.domain.offer.OfferEvaluator
 import br.com.roxou.mobilidade.domain.offer.Verdict
 import java.util.Locale
 import kotlin.math.abs
 
 /**
- * Janela flutuante, pequena e escura. Na oferta mostra o veredito, um valor consolidado
- * (busca + viagem somadas) e o motivo. Depois encolhe para uma pílula com o botão do Waze.
- * Arrasta para mudar de lugar; um toque abre ou fecha os detalhes.
+ * Janela flutuante pequena. Na oferta mostra só: cor/veredito, R$/km total (busca + viagem),
+ * R$/h e a nota do passageiro, mais um alerta quando há bairro evitado ou nota baixa.
+ * Some sozinha depois do tempo escolhido (2, 3, 5 ou 10 s). Depois do aceite pode ficar
+ * só um botãozinho do Waze (opcional). Arrasta para cima/baixo; a posição na largura
+ * (esquerda, centro, direita) vem dos ajustes.
  * Usa a camada da acessibilidade (TYPE_ACCESSIBILITY_OVERLAY): não precisa de permissão extra.
  */
 class FloatingPanel(
@@ -32,6 +33,8 @@ class FloatingPanel(
     private val onWaze: (toDropoff: Boolean) -> Unit,
     private val onAccepted: () -> Unit,
 ) {
+    private enum class Mode { NONE, OFFER, WAZE }
+
     private val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val prefs = context.getSharedPreferences("roxou_overlay", Context.MODE_PRIVATE)
     private val handler = Handler(Looper.getMainLooper())
@@ -44,7 +47,7 @@ class FloatingPanel(
     private val red = Color.parseColor("#FF4D4D")
 
     private val panelBg = GradientDrawable().apply {
-        cornerRadius = dp(16).toFloat()
+        cornerRadius = dp(14).toFloat()
         setColor(Color.parseColor("#EE141414"))
     }
 
@@ -52,78 +55,66 @@ class FloatingPanel(
         textSize = size
         setTextColor(color)
         if (bold) typeface = Typeface.DEFAULT_BOLD
-    }
-
-    private fun TextView.oneLine() = apply {
         maxLines = 1
-        ellipsize = android.text.TextUtils.TruncateAt.END
     }
 
-    private val verdictView = text(17f, bold = true).oneLine()
-    private val mainView = text(24f, bold = true).oneLine()
-    private val detailView = text(14f, Color.parseColor("#DDDDDD")).oneLine()
-    private val moneyView = text(13f, Color.parseColor("#AAAAAA")).oneLine()
-    private val reasonView = text(13f, Color.parseColor("#CCCCCC")).apply { maxLines = 2 }
-    private val areaView = text(15f, bold = true).apply {
-        setPadding(dp(8), dp(4), dp(8), dp(4))
-        background = GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(red) }
+    private val verdictView = text(13f, bold = true)
+    private val mainView = text(22f, bold = true)
+    private val detailView = text(13f, Color.parseColor("#DDDDDD"))
+    private val alertView = text(13f, Color.WHITE, bold = true).apply {
+        setPadding(dp(6), dp(2), dp(6), dp(2))
+        background = GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(red) }
     }
-    private fun wazeButton(label: String) = text(13f, Color.BLACK, bold = true).apply {
+    private fun pill(label: String, bg: Int, fg: Int = Color.BLACK) = text(12f, fg, bold = true).apply {
         text = label
-        setPadding(dp(10), dp(6), dp(10), dp(6))
-        background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(Color.parseColor("#33CCFF")) }
+        setPadding(dp(8), dp(4), dp(8), dp(4))
+        background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(bg) }
     }
-    /** Etapa 1: deslocamento até o passageiro (ponto A). Etapa 2: do ponto A até o destino (ponto B). */
-    private val pickupButton = wazeButton("① Embarque")
-    private val dropoffButton = wazeButton("② Destino")
-    /** Um toque grava a corrida no histórico ("a confirmar"). Não aceita nada na Uber/99. */
-    private val acceptButton = text(13f, Color.BLACK, bold = true).apply {
-        text = "✔ Aceitei"
-        setPadding(dp(10), dp(6), dp(10), dp(6))
-        background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(green) }
-    }
-    private var logged = false
-    private val hideView = text(18f, Color.parseColor("#888888"), bold = true).apply {
-        text = "  ✕"
-        setPadding(dp(8), dp(2), dp(2), dp(2))
+    /** Etapa 1: até o passageiro (ponto A). Etapa 2: do ponto A até o destino (ponto B). */
+    private val pickupButton = pill("Embarque", Color.parseColor("#33CCFF"))
+    private val dropoffButton = pill("Destino", Color.parseColor("#33CCFF"))
+    /** Plano B do aceite automático: um toque grava a corrida no histórico. Não aceita nada na Uber/99. */
+    private val acceptButton = pill("✔", green)
+    private val hideView = text(16f, Color.parseColor("#888888"), bold = true).apply {
+        text = "✕"
+        setPadding(dp(8), dp(0), dp(2), dp(0))
     }
     private val buttons = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         addView(pickupButton)
-        addView(dropoffButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+        addView(dropoffButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(4) })
+        addView(acceptButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(4) })
         addView(hideView)
     }
 
     private val root = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(dp(12), dp(8), dp(12), dp(10))
+        setPadding(dp(10), dp(6), dp(10), dp(8))
         background = panelBg
         alpha = 0.95f
-        listOf(verdictView, mainView, detailView, moneyView, reasonView, areaView).forEach { addView(it) }
-        addView(acceptButton, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(6) })
-        addView(buttons, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(6) })
+        addView(verdictView)
+        addView(mainView)
+        addView(detailView)
+        addView(alertView, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(3) })
+        addView(buttons, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(5) })
     }
 
     private val params = WindowManager.LayoutParams(
-        dp(250), // largura fixa: o texto quebra ou encurta dentro dela, nunca some na borda
+        WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         PixelFormat.TRANSLUCENT,
-    ).apply {
-        gravity = Gravity.TOP or Gravity.START
-        x = prefs.getInt("x", dp(12))
-        // Padrão: canto de cima à esquerda, acima do cartão da oferta e longe do X da 99.
-        y = prefs.getInt("y", dp(32))
-    }
+    ).apply { y = prefs.getInt("y", dp(32)) }
 
     private var attached = false
-    private var expanded = false
+    private var mode = Mode.NONE
+    private var pinned = false
     private var evaluation: OfferEvaluation? = null
     private var hasAddress = false
     private var driverAppOnScreen = false
-    private var dismissed = false
+    private var logged = false
     /** Qual botão do Waze fica aceso: embarque primeiro, depois destino. */
     private var nextIsDropoff = false
 
@@ -131,7 +122,7 @@ class FloatingPanel(
         acceptButton.setOnClickListener { onAccepted() }
         pickupButton.setOnClickListener { onWaze(false); nextIsDropoff = true; render() }
         dropoffButton.setOnClickListener { onWaze(true); nextIsDropoff = false; render() }
-        hideView.setOnClickListener { dismissed = true; refreshVisibility() }
+        hideView.setOnClickListener { setMode(Mode.NONE) }
         setupDrag()
     }
 
@@ -142,26 +133,29 @@ class FloatingPanel(
         if (isNew) {
             nextIsDropoff = false
             logged = false
-            dismissed = false
-            expanded = true
-            handler.removeCallbacks(collapse)
-            handler.postDelayed(collapse, 20_000)
+            pinned = false
+            handler.removeCallbacks(hide)
+            handler.postDelayed(hide, PanelPrefs.seconds(context) * 1_000L)
         }
-        render()
-        refreshVisibility()
+        setMode(Mode.OFFER)
     }
 
-    /** O cartão sumiu (aceitou, recusou ou expirou): encolhe para a pílula. */
+    /** O cartão sumiu (aceitou, recusou ou expirou): a oferta sai da tela. */
     fun offerGone() {
-        if (!expanded) return
-        handler.removeCallbacks(collapse)
-        handler.postDelayed(collapse, 1_500)
+        if (mode != Mode.OFFER) return
+        handler.removeCallbacks(hide)
+        handler.postDelayed(hide, 1_000)
     }
 
-    /** A corrida desta oferta já foi para o histórico: some o botão "Aceitei". */
+    /** A corrida foi aceita e gravada: some o ✔ e, se o motorista quiser, fica só o Waze. */
     fun markLogged() {
         logged = true
-        render()
+        if (PanelPrefs.wazeAfterAccept(context) && hasAddress) {
+            handler.removeCallbacks(hide)
+            setMode(Mode.WAZE)
+        } else {
+            render()
+        }
     }
 
     fun setDriverAppOnScreen(onScreen: Boolean) {
@@ -184,11 +178,26 @@ class FloatingPanel(
         attached = false
     }
 
-    private val collapse = Runnable { expanded = false; render() }
+    private val hide = Runnable { if (mode == Mode.OFFER && !pinned) setMode(Mode.NONE) }
+
+    private fun setMode(m: Mode) {
+        mode = m
+        render()
+        refreshVisibility()
+    }
+
+    private fun applyPosition() {
+        when (PanelPrefs.position(context)) {
+            PanelPrefs.Position.LEFT -> { params.gravity = Gravity.TOP or Gravity.START; params.x = dp(8) }
+            PanelPrefs.Position.CENTER -> { params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL; params.x = 0 }
+            PanelPrefs.Position.RIGHT -> { params.gravity = Gravity.TOP or Gravity.END; params.x = dp(8) }
+        }
+    }
 
     private fun refreshVisibility() {
-        val show = driverAppOnScreen && !dismissed && evaluation != null
+        val show = driverAppOnScreen && mode != Mode.NONE && evaluation != null
         if (show && !attached) {
+            applyPosition()
             runCatching { wm.addView(root, params) }.onSuccess { attached = true }
         } else if (!show && attached) {
             runCatching { wm.removeView(root) }
@@ -207,87 +216,81 @@ class FloatingPanel(
         verdictView.setTextColor(color)
         verdictView.text = when {
             e.blocked -> "⛔ BAIRRO EVITADO"
-            e.verdict == Verdict.GOOD -> "✔ COMPENSA"
-            e.verdict == Verdict.BORDERLINE -> "≈ NO LIMITE"
-            else -> "✖ NÃO COMPENSA"
+            e.verdict == Verdict.GOOD -> "COMPENSA"
+            e.verdict == Verdict.BORDERLINE -> "NO LIMITE"
+            else -> "NÃO COMPENSA"
         }
-        val perKm = String.format(pt, "%.2f", e.perKmCents / 100.0)
-        val perHour = String.format(pt, "%.0f", e.perHourCents / 100.0)
-        mainView.text = "R$ $perKm/km"
-        detailView.text = String.format(pt, "R$ %s/h · %.1f km · %d min", perHour, e.totalKm, e.totalMinutes)
-        moneyView.text = "Valor ${OfferEvaluator.money(e.offer.fareCents)} · sobra ${OfferEvaluator.money(e.netCents)}"
-        reasonView.text = e.reason
+        mainView.text = String.format(pt, "R$ %.2f/km", e.perKmCents / 100.0)
+        val rating = e.offer.passengerRating?.let { String.format(pt, " · ★ %.2f", it) }.orEmpty()
+        detailView.text = String.format(pt, "R$ %.0f/h", e.perHourCents / 100.0) + rating
 
         val blockedArea = listOf(e.pickupArea, e.dropoffArea).firstOrNull { it.blocked }
         val unknown = listOf(e.pickupArea, e.dropoffArea).firstOrNull { it.unknownCode != null }
+        val alertBg = alertView.background as GradientDrawable
         when {
             blockedArea != null -> {
-                areaView.text = "⛔ ${if (blockedArea === e.pickupArea) "EMBARQUE" else "DESTINO"}: ${blockedArea.area?.uppercase(pt)}"
-                (areaView.background as GradientDrawable).setColor(red)
-                areaView.setTextColor(Color.WHITE)
-                areaView.visibility = View.VISIBLE
+                alertView.text = "${if (blockedArea === e.pickupArea) "Embarque" else "Destino"}: ${blockedArea.area}"
+                alertBg.setColor(red)
+                alertView.visibility = View.VISIBLE
+            }
+            e.lowRating -> {
+                alertView.text = "⚠ Atenção: nota do passageiro"
+                alertBg.setColor(Color.parseColor("#C0392B"))
+                alertView.visibility = View.VISIBLE
             }
             unknown != null -> {
-                areaView.text = "? código ${unknown.unknownCode}: traduza em Config"
-                (areaView.background as GradientDrawable).setColor(Color.parseColor("#444444"))
-                areaView.setTextColor(Color.WHITE)
-                areaView.visibility = View.VISIBLE
+                alertView.text = "Código ${unknown.unknownCode}: traduza nos Ajustes"
+                alertBg.setColor(Color.parseColor("#444444"))
+                alertView.visibility = View.VISIBLE
             }
-            else -> areaView.visibility = View.GONE
+            else -> alertView.visibility = View.GONE
         }
 
-        acceptButton.visibility = if (logged) View.GONE else View.VISIBLE
+        val offerMode = mode == Mode.OFFER
+        verdictView.visibility = if (offerMode) View.VISIBLE else View.GONE
+        mainView.visibility = if (offerMode) View.VISIBLE else View.GONE
+        detailView.visibility = if (offerMode) View.VISIBLE else View.GONE
+        if (!offerMode) alertView.visibility = View.GONE
+        acceptButton.visibility = if (logged || !offerMode) View.GONE else View.VISIBLE
         // O próximo passo fica aceso; o outro fica apagado (mas continua funcionando).
         pickupButton.alpha = if (nextIsDropoff) 0.45f else 1f
         dropoffButton.alpha = if (nextIsDropoff) 1f else 0.45f
         val wazeVis = if (hasAddress) View.VISIBLE else View.GONE
         pickupButton.visibility = wazeVis
         dropoffButton.visibility = wazeVis
-
-        // Pílula: só a cor, o valor consolidado e o Waze. O alerta de bairro continua visível.
-        verdictView.visibility = if (expanded || e.blocked) View.VISIBLE else View.GONE
-        detailView.visibility = if (expanded) View.VISIBLE else View.GONE
-        reasonView.visibility = if (expanded) View.VISIBLE else View.GONE
-        moneyView.visibility = if (expanded) View.VISIBLE else View.GONE
-        mainView.textSize = if (expanded) 24f else 18f
-        params.width = if (expanded || e.blocked) dp(250) else WindowManager.LayoutParams.WRAP_CONTENT
         root.requestLayout()
         if (attached) runCatching { wm.updateViewLayout(root, params) }
     }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupDrag() {
-        var startX = 0
         var startY = 0
-        var touchX = 0f
         var touchY = 0f
         var moved = false
         root.setOnTouchListener { _, ev ->
             when (ev.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    startX = params.x; startY = params.y
-                    touchX = ev.rawX; touchY = ev.rawY
+                    startY = params.y
+                    touchY = ev.rawY
                     moved = false
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = ev.rawX - touchX
                     val dy = ev.rawY - touchY
-                    if (abs(dx) > dp(8) || abs(dy) > dp(8)) moved = true
+                    if (abs(dy) > dp(8)) moved = true
                     if (moved) {
-                        params.x = startX + dx.toInt()
-                        params.y = startY + dy.toInt()
+                        params.y = (startY + dy.toInt()).coerceAtLeast(0)
                         if (attached) runCatching { wm.updateViewLayout(root, params) }
                     }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
                     if (moved) {
-                        prefs.edit().putInt("x", params.x).putInt("y", params.y).apply()
-                    } else {
-                        expanded = !expanded
-                        handler.removeCallbacks(collapse)
-                        render()
+                        prefs.edit().putInt("y", params.y).apply()
+                    } else if (mode == Mode.OFFER) {
+                        // Um toque segura a oferta na tela até ela sumir do app.
+                        pinned = true
+                        handler.removeCallbacks(hide)
                     }
                     true
                 }

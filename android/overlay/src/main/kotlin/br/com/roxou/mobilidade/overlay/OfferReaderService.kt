@@ -17,7 +17,10 @@ import br.com.roxou.mobilidade.domain.model.Platform
 import br.com.roxou.mobilidade.domain.offer.AcceptDetector
 import br.com.roxou.mobilidade.domain.offer.AreaFilter
 import br.com.roxou.mobilidade.domain.offer.OcrLine
+import br.com.roxou.mobilidade.domain.offer.OfferEvaluation
 import br.com.roxou.mobilidade.domain.offer.OfferEvaluator
+import br.com.roxou.mobilidade.domain.offer.OfferOutcome
+import br.com.roxou.mobilidade.domain.offer.OfferRecord
 import br.com.roxou.mobilidade.domain.offer.OfferParser
 import br.com.roxou.mobilidade.domain.offer.TierContext
 import br.com.roxou.mobilidade.domain.rental.VehicleOwnership
@@ -60,6 +63,11 @@ class OfferReaderService : AccessibilityService() {
     private var lastOffer: br.com.roxou.mobilidade.domain.offer.ParsedOffer? = null
     private var lastOfferShownAt = 0L
     private val loggedKeys = mutableSetOf<String>()
+    /** Oferta atual, para o histórico de todas as ofertas (aceitas e recusadas). */
+    private var lastEval: OfferEvaluation? = null
+    private var lastOfferId = ""
+    private var lastOfferAt: java.time.Instant? = null
+    private var lastRecordedId = ""
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -144,6 +152,13 @@ class OfferReaderService : AccessibilityService() {
         dropoffAddress = offer.dropoffAddress
         addressesAt = SystemClock.uptimeMillis()
         panel?.showOffer(e)
+        if (offer.key != lastOffer?.key) {
+            // Oferta anterior que não chegou a ser fechada: entra como recusada.
+            if (lastEval != null && lastOffer?.key?.let { it !in loggedKeys } == true && lastRecordedId != lastOfferId) record(OfferOutcome.REJECTED)
+            lastOfferId = repo.newId()
+            lastOfferAt = repo.now()
+        }
+        lastEval = e
         lastOffer = offer
         lastOfferShownAt = SystemClock.uptimeMillis()
         if (offer.key in loggedKeys) panel?.markLogged()
@@ -153,15 +168,31 @@ class OfferReaderService : AccessibilityService() {
         }
     }
 
-    /** O cartão sumiu: olha a tela uma vez para ver se virou "a caminho" (o motorista aceitou). */
-    private fun checkAcceptedSoon() {
+    /**
+     * O cartão sumiu: olha a tela para ver se virou "a caminho" (o motorista aceitou).
+     * Olha duas vezes (1,5 s e 4 s depois). Sem aceite, a oferta entra no histórico como recusada.
+     */
+    private fun checkAcceptedSoon(attempt: Int = 0) {
         val offer = lastOffer ?: return
-        if (offer.key in loggedKeys || SystemClock.uptimeMillis() - lastOfferShownAt > 90_000) return
+        if (offer.key in loggedKeys) return
+        if (SystemClock.uptimeMillis() - lastOfferShownAt > 90_000) { record(OfferOutcome.REJECTED); return }
         handler.postDelayed({
+            if (offer.key != lastOffer?.key || offer.key in loggedKeys) return@postDelayed
             screenshotText(null) { lines ->
-                if (lines != null && AcceptDetector.looksAccepted(lines)) logAccepted(byButton = false)
+                when {
+                    lines != null && AcceptDetector.looksAccepted(lines) -> logAccepted(byButton = false)
+                    attempt == 0 -> checkAcceptedSoon(1)
+                    else -> record(OfferOutcome.REJECTED)
+                }
             }
-        }, 1_500)
+        }, if (attempt == 0) 1_500 else 2_500)
+    }
+
+    private fun record(outcome: OfferOutcome) {
+        val e = lastEval ?: return
+        lastRecordedId = lastOfferId
+        val rec = OfferRecord.from(lastOfferId, lastOfferAt ?: repo.now(), e, outcome)
+        scope.launch(Dispatchers.IO) { OfferLog.append(this@OfferReaderService, rec) }
     }
 
     /** Grava a corrida aceita no histórico como "a confirmar". Só conta na meta depois de confirmada. */
@@ -171,6 +202,7 @@ class OfferReaderService : AccessibilityService() {
         if (loggedKeys.size > 200) loggedKeys.clear()
         val trip = AcceptDetector.toTrip(repo.newId(), offer, repo.now(), byButton)
         scope.launch { repo.saveTrip(trip) }
+        record(OfferOutcome.ACCEPTED)
         panel?.markLogged()
         toast(if (byButton) "Corrida registrada (a confirmar)" else "Aceite detectado: corrida registrada (a confirmar)")
     }
