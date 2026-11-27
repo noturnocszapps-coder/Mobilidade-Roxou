@@ -34,6 +34,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,11 +56,13 @@ import androidx.compose.ui.unit.sp
 fun BoasVindasScreen(
     onConcluir: (Recursos) -> Unit,
     onLigarLeitura: () -> Unit,
+    leituraLigada: Boolean = false,
 ) {
     BoasVindasConteudo(
         passoInicial = 0,
         onConcluir = onConcluir,
         onLigarLeitura = onLigarLeitura,
+        leituraLigada = leituraLigada,
     )
 }
 
@@ -68,6 +71,7 @@ private fun BoasVindasConteudo(
     passoInicial: Int,
     onConcluir: (Recursos) -> Unit,
     onLigarLeitura: () -> Unit,
+    leituraLigada: Boolean = false,
 ) {
     var passo by remember { mutableIntStateOf(passoInicial.coerceIn(0, 2)) }
     var recursos by remember {
@@ -80,6 +84,10 @@ private fun BoasVindasConteudo(
                 janelaFlutuante = true,
             ),
         )
+    }
+    // Voltou das configurações com a leitura ligada: segue sozinho.
+    LaunchedEffect(leituraLigada, passo) {
+        if (leituraLigada && passo == 2) onConcluir(recursos)
     }
 
     Surface(

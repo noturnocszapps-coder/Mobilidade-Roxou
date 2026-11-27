@@ -4,6 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -12,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -30,6 +35,7 @@ import br.com.roxou.mobilidade.design.NovaCorridaSheet
 import br.com.roxou.mobilidade.design.PlanoUi
 import br.com.roxou.mobilidade.design.PlanosScreen
 import br.com.roxou.mobilidade.design.Recursos
+import br.com.roxou.mobilidade.design.RoxouColors
 import br.com.roxou.mobilidade.design.RoxouDesignTheme
 import br.com.roxou.mobilidade.domain.goals.DailyGoalPlan
 import br.com.roxou.mobilidade.domain.goals.DiscountTier
@@ -116,15 +122,24 @@ fun RoxouNavHost(repo: RoxouRepository) {
 
     RoxouDesignTheme {
         if (!boasVindas) {
-            BoasVindasScreen(onConcluir = { prefs.setRecursos(it); prefs.concluirBoasVindas() }, onLigarLeitura = ligarLeitura)
+            // Margem das barras do sistema: o "Depois" ficava atrás da barra de navegação.
+            Box(Modifier.fillMaxSize().background(RoxouColors.Background).safeDrawingPadding()) {
+                BoasVindasScreen(
+                    onConcluir = { prefs.setRecursos(it); prefs.concluirBoasVindas() },
+                    onLigarLeitura = ligarLeitura,
+                    leituraLigada = leituraLigada,
+                )
+            }
             return@RoxouDesignTheme
         }
         if (planos) {
-            PlanosScreen(
-                planos = PLANOS, diasDeTeste = 7, planoAtualId = null,
-                onEscolher = { toast("Pagamento entra em breve. Por enquanto está tudo liberado.") },
-                onFechar = { planos = false },
-            )
+            Box(Modifier.fillMaxSize().background(RoxouColors.Background).safeDrawingPadding()) {
+                PlanosScreen(
+                    planos = PLANOS, diasDeTeste = 7, planoAtualId = null,
+                    onEscolher = { toast("Pagamento entra em breve. Por enquanto está tudo liberado.") },
+                    onFechar = { planos = false },
+                )
+            }
             return@RoxouDesignTheme
         }
         val mostrarCompensa = recursos.janelaFlutuante
