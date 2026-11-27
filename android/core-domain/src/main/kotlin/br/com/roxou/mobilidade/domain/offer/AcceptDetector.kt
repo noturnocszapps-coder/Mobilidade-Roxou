@@ -17,6 +17,25 @@ object AcceptDetector {
     )
     private val stillLooking = listOf("procurando", "buscando viagens", "buscando corridas", "voce esta online", "ficar offline")
 
+    /** Passageiro a bordo: a tela já mostra o fim da viagem (hora de ir ao destino). */
+    private val onTripWords = listOf(
+        "finalizar viagem", "finalizar corrida", "encerrar viagem", "encerrar corrida", "concluir viagem",
+        "concluir corrida", "deixar passageiro", "deixe o passageiro", "a caminho do destino", "rumo ao destino",
+        "deslize para finalizar", "deslize para encerrar", "passageiro a bordo",
+    )
+    /** Viagem terminou: tela de avaliação ou de ganhos da corrida. */
+    private val endedWords = listOf("avalie o passageiro", "avaliar passageiro", "como foi a viagem", "viagem concluida", "corrida finalizada", "voce ganhou")
+
+    fun looksOnTrip(lines: List<OcrLine>): Boolean {
+        val text = " " + lines.joinToString(" ") { AreaFilter.normalize(it.text) } + " "
+        return onTripWords.any { text.contains(it) }
+    }
+
+    fun looksEnded(lines: List<OcrLine>): Boolean {
+        val text = " " + lines.joinToString(" ") { AreaFilter.normalize(it.text) } + " "
+        return endedWords.any { text.contains(it) } || stillLooking.any { text.contains(it) }
+    }
+
     fun looksAccepted(lines: List<OcrLine>): Boolean {
         val text = " " + lines.joinToString(" ") { AreaFilter.normalize(it.text) } + " "
         if (stillLooking.any { text.contains(it) }) return false

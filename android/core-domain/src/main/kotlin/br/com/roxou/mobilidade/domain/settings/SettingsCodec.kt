@@ -42,6 +42,7 @@ object SettingsCodec {
     const val OFFER_TIER_HELP = "offer_tier_help_rides"
     const val OFFER_BLOCKED = "offer_blocked_areas"
     const val OFFER_CODES = "offer_area_codes"
+    const val OFFER_MIN_RATING = "offer_min_passenger_rating"
 
     fun encode(s: AppSettings): Map<String, String> = mapOf(
         OWNERSHIP to s.ownership.name,
@@ -69,6 +70,7 @@ object SettingsCodec {
         OFFER_TIER_HELP to s.offer.tierHelpRides.toString(),
         OFFER_BLOCKED to s.offer.blockedAreas.joinToString(";"),
         OFFER_CODES to encodeCodes(s.offer.areaCodes),
+        OFFER_MIN_RATING to s.offer.minPassengerRating.toString(),
     )
 
     fun decode(m: Map<String, String>): AppSettings {
@@ -106,6 +108,7 @@ object SettingsCodec {
                 tierHelpRides = m[OFFER_TIER_HELP]?.toIntOrNull()?.takeIf { it >= 0 } ?: d.offer.tierHelpRides,
                 blockedAreas = m[OFFER_BLOCKED]?.let(::decodeList) ?: d.offer.blockedAreas,
                 areaCodes = m[OFFER_CODES]?.let(::decodeCodes) ?: d.offer.areaCodes,
+                minPassengerRating = m[OFFER_MIN_RATING]?.toDoubleOrNull()?.takeIf { it in 0.0..5.0 } ?: d.offer.minPassengerRating,
             ),
         )
     }

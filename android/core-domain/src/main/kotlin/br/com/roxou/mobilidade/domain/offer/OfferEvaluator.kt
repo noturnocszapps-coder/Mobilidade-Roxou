@@ -18,6 +18,8 @@ data class OfferRules(
     val maxPickupKm: Double = 5.0,
     /** Com carro alugado, corrida um pouco fraca vira amarela se faltar até isso para a próxima faixa. */
     val tierHelpRides: Int = 10,
+    /** Nota do passageiro abaixo disso: alerta e a cor piora um nível. 0 desliga. */
+    val minPassengerRating: Double = 4.85,
     /** Bairros que o motorista não quer (embarque ou destino). */
     val blockedAreas: List<String> = emptyList(),
     /**
@@ -42,6 +44,8 @@ data class OfferEvaluation(
     val reason: String,
     val pickupArea: AreaMatch,
     val dropoffArea: AreaMatch,
+    /** Nota do passageiro abaixo do mínimo configurado. */
+    val lowRating: Boolean = false,
 ) {
     val blocked: Boolean get() = pickupArea.blocked || dropoffArea.blocked
 }
@@ -80,6 +84,13 @@ object OfferEvaluator {
             reason = "Busca longe: ${km(offer.pickupKm)} até o passageiro"
         }
 
+        val rating = offer.passengerRating
+        val lowRating = rating != null && rules.minPassengerRating > 0 && rating < rules.minPassengerRating
+        if (lowRating) {
+            if (level > 0) level -= 1
+            reason = "Nota do passageiro ${String.format(pt, "%.2f", rating)}, abaixo de ${String.format(pt, "%.2f", rules.minPassengerRating)}"
+        }
+
         // Carro alugado: corrida um pouco fraca ajuda a fechar a próxima faixa da locadora.
         val p = tier?.progress
         if (level == 0 && tier != null && tier.rented && offer.platform in tier.tierPlatforms && p?.next != null) {
@@ -103,7 +114,7 @@ object OfferEvaluator {
             1 -> Verdict.BORDERLINE
             else -> Verdict.BAD
         }
-        return OfferEvaluation(offer, verdict, totalKm, totalMin, perKm, perHour, net, reason, pickupArea, dropoffArea)
+        return OfferEvaluation(offer, verdict, totalKm, totalMin, perKm, perHour, net, reason, pickupArea, dropoffArea, lowRating)
     }
 
     fun money(c: Cents): String = String.format(pt, "R$ %.2f", c / 100.0)

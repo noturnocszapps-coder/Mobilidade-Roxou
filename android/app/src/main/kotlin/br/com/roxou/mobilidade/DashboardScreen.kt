@@ -43,6 +43,27 @@ import br.com.roxou.mobilidade.ui.shortPt
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.activity.compose.BackHandler
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.core.content.ContextCompat
+import br.com.roxou.mobilidade.overlay.PanelPrefs
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import br.com.roxou.mobilidade.domain.offer.OfferStats
+import br.com.roxou.mobilidade.domain.offer.OfferStatsEngine
+import br.com.roxou.mobilidade.overlay.OfferLog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.ZoneId
 
 class DashboardViewModel(repo: RoxouRepository) : ViewModel() {
     val state: StateFlow<AppState?> = repo.state.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -53,41 +74,103 @@ class DashboardViewModel(repo: RoxouRepository) : ViewModel() {
 fun DashboardScreen(repo: RoxouRepository, recursos: Recursos) {
     val vm: DashboardViewModel = viewModel { DashboardViewModel(repo) }
     val state by vm.state.collectAsStateWithLifecycle()
-    val s = state?.snapshot ?: return
+    val st = state ?: return
+    val s = st.snapshot
+    var tela by remember { mutableStateOf<String?>(null) }
+    var resumo by remember { mutableStateOf<OfferStats?>(null) }
+    BackHandler(enabled = tela != null) { tela = null }
     RoxouDesignTheme {
-        Column(Modifier.fillMaxSize().background(RoxouColors.Background)) {
-            if (recursos.janelaFlutuante) RadarToggle()
-            PainelScreen(s.toPainelUi(recursos), Modifier.weight(1f))
+        when (tela) {
+            "financas" -> FinancasRoute(repo, st) { tela = null }
+            "ofertas" -> resumo?.let { OfertasResumoRoute(it) { tela = null } } ?: run { tela = null }
+            else -> Column(Modifier.fillMaxSize().background(RoxouColors.Background)) {
+                if (recursos.janelaFlutuante) {
+                    RadarToggle(repo, st.settings.offer.minPassengerRating) { stats -> resumo = stats; tela = "ofertas" }
+                }
+                PainelScreen(
+                    s.toPainelUi(recursos),
+                    Modifier.weight(1f),
+                    onAbrirFinancas = { if (recursos.financas) tela = "financas" },
+                )
+            }
         }
     }
 }
 
-/** Botão grande do Radar de corridas: liga e desliga a leitura e a janela com um toque. */
+/**
+ * Botão grande do Radar de corridas: liga e desliga a leitura e a janela com um toque.
+ * Embaixo: ajustes da janela, resumo das ofertas e o aviso de bateria (para o celular não fechar o Radar).
+ */
 @Composable
-private fun RadarToggle() {
+private fun RadarToggle(repo: RoxouRepository, notaMinima: Double, onResumo: (OfferStats) -> Unit) {
     val context = LocalContext.current
     val on by Radar.flow(context).collectAsStateWithLifecycle()
     val ligado = on ?: true
     val cor = if (ligado) RoxouColors.Green else RoxouColors.TextMuted
-    Row(
+    var ajustes by remember { mutableStateOf(false) }
+    var segundoPlano by remember { mutableStateOf(false) }
+    var bateriaOk by remember { mutableStateOf(bateriaLiberada(context)) }
+    var voltou by remember { mutableStateOf(0) }
+    // Pede uma vez a permissão de notificação (Android 13+), para a notificação da corrida com Embarque e Destino.
+    val pedirNotificacao = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 33 && PanelPrefs.rideNotification(context) &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) pedirNotificacao.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+    LifecycleResumeEffect(Unit) {
+        bateriaOk = bateriaLiberada(context)
+        voltou++
+        onPauseOrDispose { }
+    }
+    val stats by produceState<OfferStats?>(null, voltou) {
+        value = withContext(Dispatchers.IO) {
+            OfferStatsEngine.compute(OfferLog.readAll(context), ZoneId.systemDefault(), LocalDate.now())
+        }
+    }
+    Column(
         Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(RoxouColors.SurfaceCard)
-            .clickable { Radar.set(context, !ligado) }
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .background(RoxouColors.SurfaceCard),
     ) {
-        Box(Modifier.size(12.dp).clip(CircleShape).background(cor))
-        Column(Modifier.weight(1f).padding(start = 12.dp)) {
-            Text("Radar de corridas", color = RoxouColors.TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text(if (ligado) "Ligado: avaliando as ofertas" else "Desligado", color = RoxouColors.TextSecondary, fontSize = 13.sp, maxLines = 1)
+        Row(
+            Modifier.fillMaxWidth().clickable { Radar.set(context, !ligado) }.padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(12.dp).clip(CircleShape).background(cor))
+            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                Text("Radar de corridas", color = RoxouColors.TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(if (ligado) "Ligado: avaliando as ofertas" else "Desligado", color = RoxouColors.TextSecondary, fontSize = 13.sp, maxLines = 1)
+            }
+            Switch(
+                checked = ligado,
+                onCheckedChange = { Radar.set(context, it) },
+                colors = SwitchDefaults.colors(checkedTrackColor = RoxouColors.Green, checkedThumbColor = Color.White),
+            )
         }
-        Switch(
-            checked = ligado,
-            onCheckedChange = { Radar.set(context, it) },
-            colors = SwitchDefaults.colors(checkedTrackColor = RoxouColors.Green, checkedThumbColor = Color.White),
-        )
+        Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            val st = stats
+            Text(
+                if (st == null || st.total == 0) "Nenhuma oferta guardada ainda" else "Hoje: ${st.todayTotal} ofertas · ${st.todayAccepted} aceitas  ›",
+                color = RoxouColors.TextSecondary, fontSize = 13.sp, maxLines = 1,
+                modifier = Modifier.weight(1f).clickable { if (st != null && st.total > 0) onResumo(st) },
+            )
+            Text(
+                "⚙ Janela", color = RoxouColors.PurpleSoft, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { ajustes = true }.padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+        if (ligado && !bateriaOk) {
+            Text(
+                "⚠ Toque aqui para o celular não fechar o Radar",
+                color = RoxouColors.Yellow, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth().clickable { segundoPlano = true }
+                    .padding(start = 18.dp, end = 18.dp, bottom = 12.dp),
+            )
+        }
     }
+    if (ajustes) JanelaAjustesDialog(repo, notaMinima) { ajustes = false }
+    if (segundoPlano) SegundoPlanoDialog { segundoPlano = false }
 }
 
 internal fun Snapshot.toPainelUi(recursos: Recursos): PainelUi {
