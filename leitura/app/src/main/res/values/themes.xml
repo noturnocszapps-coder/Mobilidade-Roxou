@@ -1,5 +1,6 @@
 <resources>
-    <style name="Theme.RoxouMobilidadeLeitura" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/roxou_primary</item>
+    <!-- Tema da plataforma: o projeto não usa a biblioteca Material Components (só o Compose Material3). -->
+    <style name="Theme.RoxouMobilidadeLeitura" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">@color/roxou_primary</item>
     </style>
 </resources>
