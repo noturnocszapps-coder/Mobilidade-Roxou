@@ -1,13 +1,13 @@
 package br.com.roxou.mobilidade.design
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,16 +29,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.abs
 
 @Composable
 fun PainelScreen(
     ui: PainelUi,
     modifier: Modifier = Modifier,
 ) {
+    val mostrarParcela = ui.recursos.locacao && ui.parcelaFaltaCentavos != null
+    val mostrarLivre = ui.recursos.financas
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = RoxouColors.Background,
@@ -45,30 +47,40 @@ fun PainelScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+                .padding(horizontal = RoxouSpacing.lg, vertical = RoxouSpacing.xl)
+                .animateContentSize(),
+            verticalArrangement = Arrangement.spacedBy(RoxouSpacing.lg),
         ) {
             TopHeader(diaTexto = ui.diaTexto)
 
+            // Bloco 1: Corridas de hoje (sempre visível)
             CorridasHojeCard(
                 corridasHoje = ui.corridasHoje,
-                metaHoje = ui.metaHoje,
+                metaHoje = if (ui.recursos.metaDiaria) ui.metaHoje else 0,
                 corridasUberHoje = ui.corridasUberHoje,
                 corridas99Hoje = ui.corridas99Hoje,
                 faturadoHojeCentavos = ui.faturadoHojeCentavos,
             )
 
-            MetaLocadoraCard(
-                corridasSemanaUber = ui.corridasSemanaUber,
-                proximaFaixaCorridas = ui.proximaFaixaCorridas,
-                proximaFaixaDescontoCentavos = ui.proximaFaixaDescontoCentavos,
-                descontoGarantidoCentavos = ui.descontoGarantidoCentavos,
-            )
+            // Bloco 2: Meta da locadora (só se recursos.metaLocadora)
+            if (ui.recursos.metaLocadora) {
+                MetaLocadoraCard(
+                    corridasSemanaUber = ui.corridasSemanaUber,
+                    proximaFaixaCorridas = ui.proximaFaixaCorridas,
+                    proximaFaixaDescontoCentavos = ui.proximaFaixaDescontoCentavos,
+                    descontoGarantidoCentavos = ui.descontoGarantidoCentavos,
+                )
+            }
 
-            FinanceiroRow(
-                parcelaFaltaCentavos = ui.parcelaFaltaCentavos,
-                dinheiroLivreCentavos = ui.dinheiroLivreCentavos,
-            )
+            // Bloco 3: Parcela e/ou Dinheiro livre
+            if (mostrarParcela || mostrarLivre) {
+                FinanceiroBloco(
+                    mostrarParcela = mostrarParcela,
+                    parcelaFaltaCentavos = ui.parcelaFaltaCentavos,
+                    mostrarLivre = mostrarLivre,
+                    dinheiroLivreCentavos = ui.dinheiroLivreCentavos,
+                )
+            }
         }
     }
 }
@@ -78,12 +90,12 @@ private fun TopHeader(diaTexto: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 4.dp),
+            .padding(horizontal = RoxouSpacing.xs),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -94,7 +106,8 @@ private fun TopHeader(diaTexto: String) {
             )
             Text(
                 text = "ROXOU",
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
                 color = RoxouColors.TextPrimary,
                 letterSpacing = 2.sp,
                 maxLines = 1,
@@ -129,10 +142,14 @@ private fun CorridasHojeCard(
     } else {
         0f
     }
+    val corProgresso by animateColorAsState(
+        targetValue = if (metaBatida) RoxouColors.Green else RoxouColors.Purple,
+        label = "progresso_hoje_cor",
+    )
 
     RoxouCard(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = 24.dp,
+        contentPadding = RoxouSpacing.xl,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -156,8 +173,8 @@ private fun CorridasHojeCard(
                     Text(
                         text = if (metaBatida) "Meta batida" else "$percentual%",
                         style = MaterialTheme.typography.labelMedium,
-                        color = if (metaBatida) RoxouColors.Green else RoxouColors.PurpleSoft,
                         fontWeight = FontWeight.SemiBold,
+                        color = if (metaBatida) RoxouColors.Green else RoxouColors.PurpleSoft,
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Ellipsis,
@@ -165,7 +182,7 @@ private fun CorridasHojeCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(RoxouSpacing.md))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -184,32 +201,36 @@ private fun CorridasHojeCard(
                 if (temMeta) {
                     Text(
                         text = " de $metaHoje",
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Medium,
                         color = RoxouColors.TextSecondary,
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
-                            .padding(start = 4.dp)
+                            .padding(start = RoxouSpacing.xs)
                             .alignByBaseline(),
                     )
                 }
             }
 
             if (temMeta) {
-                Spacer(modifier = Modifier.height(20.dp))
-                BarraProgresso(
+                Spacer(modifier = Modifier.height(RoxouSpacing.lg))
+                RoxouBarraProgresso(
                     progress = progresso,
-                    height = 10.dp,
-                    fillColor = if (metaBatida) RoxouColors.Green else RoxouColors.Purple,
+                    height = 8.dp,
+                    fillColor = corProgresso,
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(RoxouSpacing.lg))
 
             Text(
-                text = "Uber $corridasUberHoje · 99 $corridas99Hoje · ${formatarReais(faturadoHojeCentavos)}",
+                text = if (corridasHoje == 0 && faturadoHojeCentavos == 0L) {
+                    "Uber 0 · 99 0 · R$ 0"
+                } else {
+                    "Uber $corridasUberHoje · 99 $corridas99Hoje · ${formatarReais(faturadoHojeCentavos)}"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = RoxouColors.TextSecondary,
                 maxLines = 1,
@@ -231,7 +252,7 @@ private fun MetaLocadoraCard(
 
     RoxouCard(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = 22.dp,
+        contentPadding = RoxouSpacing.lg,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -260,21 +281,21 @@ private fun MetaLocadoraCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(RoxouSpacing.md))
 
             if (bateuUltima) {
                 Text(
                     text = "Faixa máxima: ${formatarReais(descontoGarantidoCentavos)}",
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.titleLarge,
                     color = RoxouColors.Green,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(RoxouSpacing.md))
 
-                BarraProgresso(
+                RoxouBarraProgresso(
                     progress = 1f,
                     height = 6.dp,
                     fillColor = RoxouColors.Green,
@@ -297,15 +318,15 @@ private fun MetaLocadoraCard(
                             append(formatarReais(desconto))
                         }
                     },
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.titleLarge,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(RoxouSpacing.md))
 
-                BarraProgresso(
+                RoxouBarraProgresso(
                     progress = progresso,
                     height = 6.dp,
                     fillColor = RoxouColors.Purple,
@@ -316,40 +337,52 @@ private fun MetaLocadoraCard(
 }
 
 @Composable
-private fun FinanceiroRow(
+private fun FinanceiroBloco(
+    mostrarParcela: Boolean,
     parcelaFaltaCentavos: Long?,
+    mostrarLivre: Boolean,
     dinheiroLivreCentavos: Long,
 ) {
-    if (parcelaFaltaCentavos == null) {
-        ValorCard(
-            rotulo = "Dinheiro livre",
-            valor = formatarReais(dinheiroLivreCentavos),
-            corValor = if (dinheiroLivreCentavos < 0L) RoxouColors.Red else RoxouColors.TextPrimary,
-            destaqueMaior = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    } else {
-        val parcelaPaga = parcelaFaltaCentavos <= 0L
+    if (mostrarParcela && mostrarLivre) {
+        val falta = parcelaFaltaCentavos ?: 0L
+        val paga = falta <= 0L
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(RoxouSpacing.md),
         ) {
             ValorCard(
                 rotulo = "Falta da parcela",
-                valor = if (parcelaPaga) "Paga" else formatarReais(parcelaFaltaCentavos),
-                corValor = if (parcelaPaga) RoxouColors.Green else RoxouColors.Red,
-                destaqueMaior = false,
+                valor = if (paga) "Paga" else formatarReais(falta),
+                corValor = if (paga) RoxouColors.Green else RoxouColors.Red,
+                larguraTotal = false,
                 modifier = Modifier.weight(1f),
             )
-
             ValorCard(
                 rotulo = "Dinheiro livre",
                 valor = formatarReais(dinheiroLivreCentavos),
                 corValor = if (dinheiroLivreCentavos < 0L) RoxouColors.Red else RoxouColors.TextPrimary,
-                destaqueMaior = false,
+                larguraTotal = false,
                 modifier = Modifier.weight(1f),
             )
         }
+    } else if (mostrarParcela) {
+        val falta = parcelaFaltaCentavos ?: 0L
+        val paga = falta <= 0L
+        ValorCard(
+            rotulo = "Falta da parcela",
+            valor = if (paga) "Paga" else formatarReais(falta),
+            corValor = if (paga) RoxouColors.Green else RoxouColors.Red,
+            larguraTotal = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    } else if (mostrarLivre) {
+        ValorCard(
+            rotulo = "Dinheiro livre",
+            valor = formatarReais(dinheiroLivreCentavos),
+            corValor = if (dinheiroLivreCentavos < 0L) RoxouColors.Red else RoxouColors.TextPrimary,
+            larguraTotal = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -358,12 +391,12 @@ private fun ValorCard(
     rotulo: String,
     valor: String,
     corValor: Color,
-    destaqueMaior: Boolean,
+    larguraTotal: Boolean,
     modifier: Modifier = Modifier,
 ) {
     RoxouCard(
         modifier = modifier,
-        contentPadding = 20.dp,
+        contentPadding = RoxouSpacing.lg,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
@@ -374,15 +407,13 @@ private fun ValorCard(
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
             )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
+            Spacer(modifier = Modifier.height(RoxouSpacing.sm))
             Text(
                 text = valor,
-                style = if (destaqueMaior) {
-                    MaterialTheme.typography.headlineMedium.copy(fontSize = 30.sp, lineHeight = 34.sp)
+                style = if (larguraTotal) {
+                    MaterialTheme.typography.headlineLarge
                 } else {
-                    MaterialTheme.typography.headlineSmall.copy(fontSize = 24.sp, lineHeight = 28.sp)
+                    MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp, lineHeight = 26.sp)
                 },
                 color = corValor,
                 maxLines = 1,
@@ -393,86 +424,12 @@ private fun ValorCard(
     }
 }
 
-@Composable
-private fun RoxouCard(
-    modifier: Modifier = Modifier,
-    contentPadding: Dp = 20.dp,
-    content: @Composable () -> Unit,
-) {
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.large,
-        color = RoxouColors.SurfaceCard,
-        border = BorderStroke(1.dp, RoxouColors.CardBorder),
-    ) {
-        Box(modifier = Modifier.padding(contentPadding)) {
-            content()
-        }
-    }
-}
-
-@Composable
-private fun BarraProgresso(
-    progress: Float,
-    height: Dp,
-    fillColor: Color,
-    modifier: Modifier = Modifier,
-) {
-    val clamped = progress.coerceIn(0f, 1f)
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(height)
-            .clip(CircleShape)
-            .background(RoxouColors.Track),
-    ) {
-        if (clamped > 0f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(clamped)
-                    .fillMaxHeight()
-                    .clip(CircleShape)
-                    .background(fillColor),
-            )
-        }
-    }
-}
-
-internal fun formatarReais(centavos: Long): String {
-    val sinal = if (centavos < 0L) "-" else ""
-    val absoluto = abs(centavos)
-    val reais = absoluto / 100L
-    val resto = absoluto % 100L
-    val reaisFormatado = formatarMilharBr(reais)
-    return if (absoluto > 10_000L) {
-        "${sinal}R$ $reaisFormatado"
-    } else {
-        val centavosStr = resto.toString().padStart(2, '0')
-        "${sinal}R$ $reaisFormatado,$centavosStr"
-    }
-}
-
-private fun formatarMilharBr(valor: Long): String {
-    val digitos = valor.toString()
-    if (digitos.length <= 3) return digitos
-    val sb = StringBuilder(digitos.length + digitos.length / 3)
-    var contador = 0
-    for (i in digitos.lastIndex downTo 0) {
-        if (contador > 0 && contador % 3 == 0) {
-            sb.append('.')
-        }
-        sb.append(digitos[i])
-        contador++
-    }
-    return sb.reverse().toString()
-}
-
 @Preview(
-    name = "Painel - Em andamento",
+    name = "Painel - Completo",
     showBackground = true,
     backgroundColor = 0xFF121016,
-    widthDp = 393,
-    heightDp = 851,
+    widthDp = 360,
+    heightDp = 760,
 )
 @Composable
 private fun PainelScreenPreview() {
@@ -491,64 +448,49 @@ private fun PainelScreenPreview() {
                 descontoGarantidoCentavos = 8000L,
                 parcelaFaltaCentavos = 114900L,
                 dinheiroLivreCentavos = 23000L,
+                recursos = Recursos(
+                    metaLocadora = true,
+                    locacao = true,
+                    financas = true,
+                    metaDiaria = true,
+                    janelaFlutuante = true,
+                ),
             ),
         )
     }
 }
 
 @Preview(
-    name = "Painel - Faixa máxima e parcela paga",
+    name = "Painel - Dia zerado / carro próprio",
     showBackground = true,
     backgroundColor = 0xFF121016,
-    widthDp = 393,
-    heightDp = 851,
+    widthDp = 360,
+    heightDp = 760,
 )
 @Composable
-private fun PainelScreenFaixaMaximaPreview() {
+private fun PainelScreenVazioPreview() {
     RoxouDesignTheme {
         PainelScreen(
             ui = PainelUi(
-                diaTexto = "Sáb 28/11",
-                corridasHoje = 20,
+                diaTexto = "Seg 30/11",
+                corridasHoje = 0,
                 metaHoje = 18,
-                corridasUberHoje = 15,
-                corridas99Hoje = 5,
-                faturadoHojeCentavos = 41200L,
-                corridasSemanaUber = 120,
-                proximaFaixaCorridas = null,
-                proximaFaixaDescontoCentavos = null,
-                descontoGarantidoCentavos = 25000L,
-                parcelaFaltaCentavos = 0L,
-                dinheiroLivreCentavos = 89000L,
-            ),
-        )
-    }
-}
-
-@Preview(
-    name = "Painel - Carro próprio",
-    showBackground = true,
-    backgroundColor = 0xFF121016,
-    widthDp = 393,
-    heightDp = 851,
-)
-@Composable
-private fun PainelScreenCarroProprioPreview() {
-    RoxouDesignTheme {
-        PainelScreen(
-            ui = PainelUi(
-                diaTexto = "Dom 29/11",
-                corridasHoje = 9,
-                metaHoje = 0,
-                corridasUberHoje = 6,
-                corridas99Hoje = 3,
-                faturadoHojeCentavos = 18500L,
-                corridasSemanaUber = 42,
-                proximaFaixaCorridas = 60,
-                proximaFaixaDescontoCentavos = 16000L,
+                corridasUberHoje = 0,
+                corridas99Hoje = 0,
+                faturadoHojeCentavos = 0L,
+                corridasSemanaUber = 0,
+                proximaFaixaCorridas = 40,
+                proximaFaixaDescontoCentavos = 8000L,
                 descontoGarantidoCentavos = 0L,
                 parcelaFaltaCentavos = null,
-                dinheiroLivreCentavos = 18500L,
+                dinheiroLivreCentavos = 0L,
+                recursos = Recursos(
+                    metaLocadora = false,
+                    locacao = false,
+                    financas = true,
+                    metaDiaria = false,
+                    janelaFlutuante = true,
+                ),
             ),
         )
     }

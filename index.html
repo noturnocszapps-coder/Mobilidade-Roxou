@@ -1,13 +1,1383 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <title>Roxou Mobilidade — Visualização das Telas</title>
+    <meta
+      name="description"
+      content="Plataforma de mobilidade urbana negociada focada em Presidente Prudente/SP. Visualização das telas Painel e O que compensa pra mim."
+    />
+    <meta property="og:title" content="Roxou Mobilidade" />
+    <meta
+      property="og:description"
+      content="Visualização das telas Painel e O que compensa pra mim do app Roxou Mobilidade."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-canvas: #0b090f;
+        --bg-screen: #121016;
+        --surface-card: #1e1a26;
+        --card-border: #2b2538;
+        --track: #2d273b;
+        --purple: #8e44ff;
+        --purple-soft: #b380ff;
+        --green: #2ecc71;
+        --yellow: #f1c40f;
+        --red: #e74c3c;
+        --text-primary: #f7f5fa;
+        --text-secondary: #a39bb0;
+        --text-muted: #7b728a;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        background-color: var(--bg-canvas);
+        color: var(--text-primary);
+        font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      .tabular {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .single-line {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* Top studio bar */
+      .studio-header {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        background: rgba(11, 9, 15, 0.88);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid #1e1a26;
+      }
+
+      .studio-header-inner {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 14px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .studio-brand {
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--text-primary);
+        white-space: nowrap;
+      }
+
+      .view-tabs {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px;
+        background: var(--surface-card);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+      }
+
+      .view-tab {
+        appearance: none;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background-color 160ms ease, color 160ms ease;
+      }
+
+      .view-tab:hover {
+        color: var(--text-primary);
+      }
+
+      .view-tab.active {
+        background: var(--purple);
+        color: #ffffff;
+      }
+
+      /* Showcase stage */
+      .stage {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 20px 56px;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 40px;
+        flex-wrap: wrap;
+      }
+
+      .screen-column {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        width: 100%;
+        max-width: 393px;
+      }
+
+      .screen-column.hidden {
+        display: none;
+      }
+
+      .column-bar {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 0 4px;
+      }
+
+      .column-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+
+      .preset-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px;
+        background: var(--surface-card);
+        border: 1px solid var(--card-border);
+        border-radius: 10px;
+      }
+
+      .preset-btn {
+        appearance: none;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 5px 9px;
+        border-radius: 7px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background-color 150ms ease, color 150ms ease;
+      }
+
+      .preset-btn:hover {
+        color: var(--text-primary);
+      }
+
+      .preset-btn.active {
+        background: #2f2840;
+        color: var(--text-primary);
+      }
+
+      /* Android Phone Frame (393dp logical width ~ 1080x2340) */
+      .phone-frame {
+        width: 100%;
+        max-width: 393px;
+        background: var(--bg-screen);
+        border: 1px solid var(--card-border);
+        border-radius: 36px;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+        overflow: hidden;
+      }
+
+      .phone-frame--painel {
+        min-height: 760px;
+      }
+
+      .phone-screen {
+        padding: 24px 20px 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .phone-screen--compensa {
+        gap: 16px;
+      }
+
+      /* Painel Top Header */
+      .painel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 4px;
+      }
+
+      .roxou-mark {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .roxou-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--purple);
+        flex-shrink: 0;
+      }
+
+      .roxou-word {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        color: var(--text-primary);
+      }
+
+      .painel-date {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+      }
+
+      /* Cards */
+      .roxou-card {
+        background: var(--surface-card);
+        border: 1px solid var(--card-border);
+        border-radius: 28px;
+        padding: 20px;
+      }
+
+      .roxou-card--hero {
+        padding: 24px;
+      }
+
+      .roxou-card--meta {
+        padding: 22px;
+      }
+
+      .card-top-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .card-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        letter-spacing: 0.01em;
+      }
+
+      .card-status {
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .hero-number-row {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin-top: 14px;
+      }
+
+      .hero-number {
+        font-size: 72px;
+        font-weight: 800;
+        line-height: 1.02;
+        letter-spacing: -0.04em;
+        color: var(--text-primary);
+      }
+
+      .hero-meta {
+        font-size: 26px;
+        font-weight: 500;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        color: var(--text-secondary);
+      }
+
+      .progress-track {
+        width: 100%;
+        background: var(--track);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .progress-track--hero {
+        height: 10px;
+        margin-top: 20px;
+      }
+
+      .progress-track--thin {
+        height: 6px;
+        margin-top: 14px;
+      }
+
+      .progress-fill {
+        height: 100%;
+        border-radius: 999px;
+        transition: width 200ms cubic-bezier(0.16, 1, 0.3, 1), background-color 200ms ease;
+      }
+
+      .hero-subline {
+        margin-top: 20px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-secondary);
+      }
+
+      .meta-value {
+        margin-top: 12px;
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.015em;
+        color: var(--text-primary);
+      }
+
+      .meta-arrow {
+        color: var(--text-muted);
+      }
+
+      .meta-reward {
+        color: var(--purple-soft);
+      }
+
+      .meta-muted-right {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-muted);
+      }
+
+      /* Block 3: Financeiro */
+      .finance-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .finance-grid--single {
+        grid-template-columns: 1fr;
+      }
+
+      .finance-value {
+        margin-top: 10px;
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 1.18;
+        letter-spacing: -0.02em;
+      }
+
+      .finance-value--large {
+        font-size: 30px;
+      }
+
+      /* Compensa Screen */
+      .compensa-intro {
+        padding: 0 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .compensa-title {
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+        color: var(--text-primary);
+      }
+
+      .compensa-subtitle {
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1.45;
+        color: var(--text-secondary);
+      }
+
+      .section-card-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 14px;
+      }
+
+      .slider-group {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .slider-item {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .slider-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .slider-value {
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+      }
+
+      /* Custom Range Slider matching Compose Material 3 */
+      input[type="range"].roxou-slider {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--track);
+        outline: none;
+        cursor: pointer;
+        margin: 8px 0;
+      }
+
+      input[type="range"].roxou-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--thumb-color, var(--purple));
+        border: 2px solid var(--bg-screen);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+        transition: transform 120ms ease;
+      }
+
+      input[type="range"].roxou-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.08);
+      }
+
+      input[type="range"].roxou-slider::-moz-range-thumb {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--thumb-color, var(--purple));
+        border: 2px solid var(--bg-screen);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+      }
+
+      input[type="range"].roxou-slider:focus-visible {
+        outline: 2px solid var(--purple-soft);
+        outline-offset: 6px;
+      }
+
+      /* Chips */
+      .chips-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .chips-wrap:empty {
+        display: none;
+      }
+
+      .bairro-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--track);
+        border: 1px solid var(--card-border);
+        border-radius: 999px;
+        padding: 7px 10px 7px 12px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+        cursor: pointer;
+        transition: border-color 150ms ease, background-color 150ms ease;
+      }
+
+      .bairro-chip:hover {
+        border-color: var(--purple-soft);
+        background: #352e45;
+      }
+
+      .chip-x {
+        color: var(--text-secondary);
+        font-size: 15px;
+        line-height: 1;
+        font-weight: 600;
+      }
+
+      .add-bairro-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .bairro-input {
+        flex: 1;
+        min-width: 0;
+        height: 48px;
+        padding: 0 14px;
+        border-radius: 14px;
+        border: 1px solid var(--card-border);
+        background: var(--bg-screen);
+        color: var(--text-primary);
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 500;
+        outline: none;
+        transition: border-color 150ms ease;
+      }
+
+      .bairro-input::placeholder {
+        color: var(--text-muted);
+      }
+
+      .bairro-input:focus {
+        border-color: var(--purple);
+      }
+
+      .add-btn {
+        height: 48px;
+        padding: 0 16px;
+        border: none;
+        border-radius: 14px;
+        background: var(--purple);
+        color: #ffffff;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: opacity 150ms ease, transform 120ms ease;
+      }
+
+      .add-btn:disabled {
+        background: var(--track);
+        color: var(--text-muted);
+        cursor: not-allowed;
+      }
+
+      .add-btn:not(:disabled):active {
+        transform: scale(0.97);
+      }
+
+      /* Live Example Card */
+      .live-card {
+        background: var(--surface-card);
+        border-radius: 28px;
+        padding: 20px;
+        border: 1.5px solid rgba(241, 196, 15, 0.55);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        transition: border-color 180ms ease;
+      }
+
+      .live-status-tag {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        padding: 4px 10px;
+        border-radius: 8px;
+        white-space: nowrap;
+      }
+
+      .live-text {
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1.48;
+        color: var(--text-secondary);
+      }
+
+      .live-strong {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+
+      /* Primary Save CTA */
+      .save-btn {
+        width: 100%;
+        height: 56px;
+        border: none;
+        border-radius: 24px;
+        background: var(--purple);
+        color: #ffffff;
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: filter 150ms ease, transform 120ms ease;
+      }
+
+      .save-btn:hover {
+        filter: brightness(1.07);
+      }
+
+      .save-btn:active {
+        transform: scale(0.985);
+      }
+
+      .save-feedback {
+        text-align: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--green);
+        min-height: 18px;
+        opacity: 0;
+        transition: opacity 180ms ease;
+      }
+
+      .save-feedback.visible {
+        opacity: 1;
+      }
+
+      /* Color utilities */
+      .c-red {
+        color: var(--red);
+      }
+      .c-green {
+        color: var(--green);
+      }
+      .c-yellow {
+        color: var(--yellow);
+      }
+      .c-purple {
+        color: var(--purple-soft);
+      }
+      .c-white {
+        color: var(--text-primary);
+      }
+
+      @media (max-width: 879px) {
+        .tab-both {
+          display: none;
+        }
+        .stage {
+          padding: 20px 14px 40px;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <header class="studio-header">
+      <div class="studio-header-inner">
+        <span class="studio-brand">Roxou Mobilidade</span>
+        <div class="view-tabs" role="tablist" aria-label="Visualização das telas">
+          <button type="button" class="view-tab tab-both active" data-view="both" role="tab" aria-selected="true">
+            Lado a lado
+          </button>
+          <button type="button" class="view-tab" data-view="painel" role="tab" aria-selected="false">
+            Painel
+          </button>
+          <button type="button" class="view-tab" data-view="compensa" role="tab" aria-selected="false">
+            O que compensa
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="stage">
+      <!-- Tela 1: Painel -->
+      <section class="screen-column" id="col-painel" aria-label="Tela Painel">
+        <div class="column-bar">
+          <span class="column-title">Painel</span>
+          <div class="preset-group" role="group" aria-label="Cenários do painel">
+            <button type="button" class="preset-btn active" data-preset="andamento">Padrão</button>
+            <button type="button" class="preset-btn" data-preset="maxima">Faixa máx.</button>
+            <button type="button" class="preset-btn" data-preset="proprio">Próprio</button>
+          </div>
+        </div>
+
+        <div class="phone-frame phone-frame--painel">
+          <div class="phone-screen">
+            <div class="painel-header">
+              <div class="roxou-mark">
+                <span class="roxou-dot" aria-hidden="true"></span>
+                <span class="roxou-word single-line">ROXOU</span>
+              </div>
+              <span class="painel-date single-line" id="p-dia">Sex 27/11</span>
+            </div>
+
+            <!-- Bloco 1: Corridas hoje -->
+            <div class="roxou-card roxou-card--hero">
+              <div class="card-top-row">
+                <span class="card-label single-line">Corridas hoje</span>
+                <span class="card-status single-line tabular c-purple" id="p-percent">67%</span>
+              </div>
+
+              <div class="hero-number-row">
+                <span class="hero-number single-line tabular" id="p-corridas">12</span>
+                <span class="hero-meta single-line tabular" id="p-meta">de 18</span>
+              </div>
+
+              <div class="progress-track progress-track--hero" id="p-hero-bar-wrap">
+                <div class="progress-fill" id="p-hero-bar" style="width: 66.7%; background: var(--purple)"></div>
+              </div>
+
+              <div class="hero-subline single-line tabular" id="p-subline">Uber 12 · 99 0 · R$ 230</div>
+            </div>
+
+            <!-- Bloco 2: Meta da locadora -->
+            <div class="roxou-card roxou-card--meta">
+              <div class="card-top-row">
+                <span class="card-label single-line">Meta da locadora</span>
+                <span class="meta-muted-right single-line tabular" id="p-garantido">Garantido R$ 80,00</span>
+              </div>
+
+              <div class="meta-value single-line tabular" id="p-locadora-texto">
+                54 de 60 <span class="meta-arrow">→</span> <span class="meta-reward">R$ 160</span>
+              </div>
+
+              <div class="progress-track progress-track--thin">
+                <div class="progress-fill" id="p-locadora-bar" style="width: 90%; background: var(--purple)"></div>
+              </div>
+            </div>
+
+            <!-- Bloco 3: Parcela e Dinheiro livre -->
+            <div class="finance-grid" id="p-finance-grid">
+              <div class="roxou-card" id="p-parcela-card">
+                <div class="card-label single-line">Falta da parcela</div>
+                <div class="finance-value single-line tabular c-red" id="p-parcela-val">R$ 1.149</div>
+              </div>
+
+              <div class="roxou-card">
+                <div class="card-label single-line">Dinheiro livre</div>
+                <div class="finance-value single-line tabular c-white" id="p-livre-val">R$ 230</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tela 2: O que compensa pra mim -->
+      <section class="screen-column" id="col-compensa" aria-label="Tela O que compensa pra mim">
+        <div class="column-bar">
+          <span class="column-title">O que compensa pra mim</span>
+        </div>
+
+        <div class="phone-frame">
+          <div class="phone-screen phone-screen--compensa">
+            <div class="compensa-intro">
+              <h1 class="compensa-title single-line">O que compensa pra mim</h1>
+              <p class="compensa-subtitle">
+                <strong class="c-green">Verde</strong> quando passa do BOM.
+                <strong class="c-red">Vermelho</strong> quando fica abaixo do MÍNIMO.
+              </p>
+            </div>
+
+            <!-- Cartão 1: Por km rodado -->
+            <div class="roxou-card">
+              <div class="section-card-title single-line">Por km rodado (busca + viagem)</div>
+              <div class="slider-group">
+                <div class="slider-item">
+                  <div class="slider-head">
+                    <label class="card-label single-line" for="sl-min-km">Mínimo</label>
+                    <span class="slider-value single-line tabular c-red" id="val-min-km">R$ 1,50</span>
+                  </div>
+                  <input
+                    id="sl-min-km"
+                    class="roxou-slider"
+                    type="range"
+                    min="80"
+                    max="400"
+                    step="5"
+                    value="150"
+                    style="--thumb-color: var(--red)"
+                  />
+                </div>
+
+                <div class="slider-item">
+                  <div class="slider-head">
+                    <label class="card-label single-line" for="sl-bom-km">Bom</label>
+                    <span class="slider-value single-line tabular c-green" id="val-bom-km">R$ 2,00</span>
+                  </div>
+                  <input
+                    id="sl-bom-km"
+                    class="roxou-slider"
+                    type="range"
+                    min="80"
+                    max="400"
+                    step="5"
+                    value="200"
+                    style="--thumb-color: var(--green)"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Cartão 2: Por hora -->
+            <div class="roxou-card">
+              <div class="section-card-title single-line">Por hora</div>
+              <div class="slider-group">
+                <div class="slider-item">
+                  <div class="slider-head">
+                    <label class="card-label single-line" for="sl-min-hora">Mínimo</label>
+                    <span class="slider-value single-line tabular c-red" id="val-min-hora">R$ 30</span>
+                  </div>
+                  <input
+                    id="sl-min-hora"
+                    class="roxou-slider"
+                    type="range"
+                    min="1000"
+                    max="10000"
+                    step="100"
+                    value="3000"
+                    style="--thumb-color: var(--red)"
+                  />
+                </div>
+
+                <div class="slider-item">
+                  <div class="slider-head">
+                    <label class="card-label single-line" for="sl-bom-hora">Bom</label>
+                    <span class="slider-value single-line tabular c-green" id="val-bom-hora">R$ 40</span>
+                  </div>
+                  <input
+                    id="sl-bom-hora"
+                    class="roxou-slider"
+                    type="range"
+                    min="1000"
+                    max="10000"
+                    step="100"
+                    value="4000"
+                    style="--thumb-color: var(--green)"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Cartão 3: Busca máxima e custo -->
+            <div class="roxou-card">
+              <div class="section-card-title single-line">Busca máxima e custo</div>
+              <div class="slider-group">
+                <div class="slider-item">
+                  <div class="slider-head">
+                    <label class="card-label single-line" for="sl-busca">Busca máxima</label>
+                    <span class="slider-value single-line tabular c-white" id="val-busca">5 km</span>
+                  </div>
+                  <input
+                    id="sl-busca"
+                    class="roxou-slider"
+                    type="range"
+                    min="0"
+                    max="15"
+                    step="0.5"
+                    value="5"
+                    style="--thumb-color: var(--purple)"
+                  />
+                </div>
+
+                <div class="slider-item">
+                  <div class="slider-head">
+                    <label class="card-label single-line" for="sl-custo">Custo por km</label>
+                    <span class="slider-value single-line tabular c-white" id="val-custo">R$ 0,45</span>
+                  </div>
+                  <input
+                    id="sl-custo"
+                    class="roxou-slider"
+                    type="range"
+                    min="10"
+                    max="150"
+                    step="5"
+                    value="45"
+                    style="--thumb-color: var(--purple)"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Cartão 4: Bairros que eu evito -->
+            <div class="roxou-card">
+              <div class="section-card-title single-line">Bairros que eu evito</div>
+              <div class="chips-wrap" id="chips-container"></div>
+              <div class="add-bairro-row">
+                <input
+                  id="input-bairro"
+                  class="bairro-input"
+                  type="text"
+                  placeholder="Nome ou código (ex.: UP5S2)"
+                  autocomplete="off"
+                />
+                <button type="button" class="add-btn" id="btn-add-bairro" disabled>Adicionar</button>
+              </div>
+            </div>
+
+            <!-- Exemplo ao vivo -->
+            <div class="live-card" id="live-card">
+              <div class="card-top-row">
+                <span class="card-label single-line">Exemplo ao vivo</span>
+                <span class="live-status-tag" id="live-badge">AMARELO</span>
+              </div>
+              <p class="live-text tabular" id="live-text">
+                Corrida de R$ 15 com 8 km e 20 min →
+                <span class="live-strong">R$ 1,88/km</span> e
+                <span class="live-strong">R$ 45/h</span> →
+                <strong id="live-status-word" class="c-yellow">AMARELO</strong>
+              </p>
+            </div>
+
+            <!-- Botão Salvar -->
+            <button type="button" class="save-btn" id="btn-salvar">Salvar</button>
+            <div class="save-feedback" id="save-feedback" role="status" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        // Formatting helpers matching Kotlin implementation
+        function formatarMilharBr(valor) {
+          return String(valor).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        }
+
+        function formatarReais(centavos) {
+          var sinal = centavos < 0 ? "-" : "";
+          var abs = Math.abs(centavos);
+          var reais = Math.floor(abs / 100);
+          var resto = abs % 100;
+          var reaisStr = formatarMilharBr(reais);
+          if (abs > 10000) {
+            return sinal + "R$ " + reaisStr;
+          }
+          return sinal + "R$ " + reaisStr + "," + String(resto).padStart(2, "0");
+        }
+
+        function formatarReaisComCentavos(centavos) {
+          var reais = Math.floor(centavos / 100);
+          var resto = String(centavos % 100).padStart(2, "0");
+          return "R$ " + reais + "," + resto;
+        }
+
+        function formatarReaisInteiro(centavos) {
+          return "R$ " + Math.floor(centavos / 100);
+        }
+
+        function formatarBuscaKm(km) {
+          if (km <= 0) return "Sem limite";
+          var inteiro = Math.floor(km);
+          return km === inteiro ? inteiro + " km" : inteiro + ",5 km";
+        }
+
+        // View switcher (Lado a lado / Painel / O que compensa)
+        var viewTabs = document.querySelectorAll(".view-tab");
+        var colPainel = document.getElementById("col-painel");
+        var colCompensa = document.getElementById("col-compensa");
+        var currentView = window.innerWidth < 880 ? "painel" : "both";
+
+        function applyView(view) {
+          currentView = view;
+          viewTabs.forEach(function (btn) {
+            var isActive = btn.dataset.view === view;
+            btn.classList.toggle("active", isActive);
+            btn.setAttribute("aria-selected", String(isActive));
+          });
+          colPainel.classList.toggle("hidden", view === "compensa");
+          colCompensa.classList.toggle("hidden", view === "painel");
+        }
+
+        viewTabs.forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            applyView(btn.dataset.view);
+          });
+        });
+
+        window.addEventListener("resize", function () {
+          if (window.innerWidth < 880 && currentView === "both") {
+            applyView("painel");
+          }
+        });
+        applyView(currentView);
+
+        // Painel presets matching PainelScreen.kt previews
+        var presets = {
+          andamento: {
+            diaTexto: "Sex 27/11",
+            corridasHoje: 12,
+            metaHoje: 18,
+            corridasUberHoje: 12,
+            corridas99Hoje: 0,
+            faturadoHojeCentavos: 23000,
+            corridasSemanaUber: 54,
+            proximaFaixaCorridas: 60,
+            proximaFaixaDescontoCentavos: 16000,
+            descontoGarantidoCentavos: 8000,
+            parcelaFaltaCentavos: 114900,
+            dinheiroLivreCentavos: 23000,
+          },
+          maxima: {
+            diaTexto: "Sáb 28/11",
+            corridasHoje: 20,
+            metaHoje: 18,
+            corridasUberHoje: 15,
+            corridas99Hoje: 5,
+            faturadoHojeCentavos: 41200,
+            corridasSemanaUber: 120,
+            proximaFaixaCorridas: null,
+            proximaFaixaDescontoCentavos: null,
+            descontoGarantidoCentavos: 25000,
+            parcelaFaltaCentavos: 0,
+            dinheiroLivreCentavos: 89000,
+          },
+          proprio: {
+            diaTexto: "Dom 29/11",
+            corridasHoje: 9,
+            metaHoje: 0,
+            corridasUberHoje: 6,
+            corridas99Hoje: 3,
+            faturadoHojeCentavos: 18500,
+            corridasSemanaUber: 42,
+            proximaFaixaCorridas: 60,
+            proximaFaixaDescontoCentavos: 16000,
+            descontoGarantidoCentavos: 0,
+            parcelaFaltaCentavos: null,
+            dinheiroLivreCentavos: 18500,
+          },
+        };
+
+        function renderPainel(ui) {
+          document.getElementById("p-dia").textContent = ui.diaTexto;
+          document.getElementById("p-corridas").textContent = String(ui.corridasHoje);
+
+          var temMeta = ui.metaHoje > 0;
+          var metaBatida = temMeta && ui.corridasHoje >= ui.metaHoje;
+          var pMeta = document.getElementById("p-meta");
+          var pPercent = document.getElementById("p-percent");
+          var pHeroBarWrap = document.getElementById("p-hero-bar-wrap");
+          var pHeroBar = document.getElementById("p-hero-bar");
+
+          if (temMeta) {
+            pMeta.style.display = "";
+            pMeta.textContent = "de " + ui.metaHoje;
+            pPercent.style.display = "";
+            var pct = Math.max(0, Math.floor((ui.corridasHoje / ui.metaHoje) * 100));
+            pPercent.textContent = metaBatida ? "Meta batida" : pct + "%";
+            pPercent.className = "card-status single-line tabular " + (metaBatida ? "c-green" : "c-purple");
+            pHeroBarWrap.style.display = "";
+            var widthPct = Math.min(100, Math.max(0, (ui.corridasHoje / ui.metaHoje) * 100));
+            pHeroBar.style.width = widthPct + "%";
+            pHeroBar.style.background = metaBatida ? "var(--green)" : "var(--purple)";
+          } else {
+            pMeta.style.display = "none";
+            pPercent.style.display = "none";
+            pHeroBarWrap.style.display = "none";
+          }
+
+          document.getElementById("p-subline").textContent =
+            "Uber " +
+            ui.corridasUberHoje +
+            " · 99 " +
+            ui.corridas99Hoje +
+            " · " +
+            formatarReais(ui.faturadoHojeCentavos);
+
+          var pGarantido = document.getElementById("p-garantido");
+          var pLocadoraTexto = document.getElementById("p-locadora-texto");
+          var pLocadoraBar = document.getElementById("p-locadora-bar");
+          var bateuUltima = ui.proximaFaixaCorridas === null || ui.proximaFaixaDescontoCentavos === null;
+
+          if (bateuUltima) {
+            pGarantido.style.display = "none";
+            pLocadoraTexto.className = "meta-value single-line tabular c-green";
+            pLocadoraTexto.textContent = "Faixa máxima: " + formatarReais(ui.descontoGarantidoCentavos);
+            pLocadoraBar.style.width = "100%";
+            pLocadoraBar.style.background = "var(--green)";
+          } else {
+            if (ui.descontoGarantidoCentavos > 0) {
+              pGarantido.style.display = "";
+              pGarantido.textContent = "Garantido " + formatarReais(ui.descontoGarantidoCentavos);
+            } else {
+              pGarantido.style.display = "none";
+            }
+            pLocadoraTexto.className = "meta-value single-line tabular";
+            pLocadoraTexto.innerHTML =
+              ui.corridasSemanaUber +
+              " de " +
+              ui.proximaFaixaCorridas +
+              ' <span class="meta-arrow">→</span> <span class="meta-reward">' +
+              formatarReais(ui.proximaFaixaDescontoCentavos) +
+              "</span>";
+            var locPct = Math.min(100, Math.max(0, (ui.corridasSemanaUber / ui.proximaFaixaCorridas) * 100));
+            pLocadoraBar.style.width = locPct + "%";
+            pLocadoraBar.style.background = "var(--purple)";
+          }
+
+          var financeGrid = document.getElementById("p-finance-grid");
+          var parcelaCard = document.getElementById("p-parcela-card");
+          var parcelaVal = document.getElementById("p-parcela-val");
+          var livreVal = document.getElementById("p-livre-val");
+
+          livreVal.textContent = formatarReais(ui.dinheiroLivreCentavos);
+
+          if (ui.parcelaFaltaCentavos === null) {
+            financeGrid.className = "finance-grid finance-grid--single";
+            parcelaCard.style.display = "none";
+            livreVal.className =
+              "finance-value finance-value--large single-line tabular " +
+              (ui.dinheiroLivreCentavos < 0 ? "c-red" : "c-white");
+          } else {
+            financeGrid.className = "finance-grid";
+            parcelaCard.style.display = "";
+            var paga = ui.parcelaFaltaCentavos <= 0;
+            parcelaVal.textContent = paga ? "Paga" : formatarReais(ui.parcelaFaltaCentavos);
+            parcelaVal.className = "finance-value single-line tabular " + (paga ? "c-green" : "c-red");
+            livreVal.className =
+              "finance-value single-line tabular " + (ui.dinheiroLivreCentavos < 0 ? "c-red" : "c-white");
+          }
+        }
+
+        var presetButtons = document.querySelectorAll(".preset-btn");
+        presetButtons.forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            presetButtons.forEach(function (b) {
+              b.classList.toggle("active", b === btn);
+            });
+            renderPainel(presets[btn.dataset.preset]);
+          });
+        });
+        renderPainel(presets.andamento);
+
+        // CompensaScreen interactive state
+        var state = {
+          minimoPorKm: 150,
+          bomPorKm: 200,
+          minimoPorHora: 3000,
+          bomPorHora: 4000,
+          buscaMaximaKm: 5.0,
+          custoPorKm: 45,
+          bairrosEvitados: ["Jardim Leonor", "UP5S2"],
+        };
+
+        var slMinKm = document.getElementById("sl-min-km");
+        var slBomKm = document.getElementById("sl-bom-km");
+        var slMinHora = document.getElementById("sl-min-hora");
+        var slBomHora = document.getElementById("sl-bom-hora");
+        var slBusca = document.getElementById("sl-busca");
+        var slCusto = document.getElementById("sl-custo");
+
+        function paintSliderTrack(slider, colorHex) {
+          var min = parseFloat(slider.min);
+          var max = parseFloat(slider.max);
+          var val = parseFloat(slider.value);
+          var pct = ((val - min) / (max - min)) * 100;
+          slider.style.background =
+            "linear-gradient(to right, " + colorHex + " 0%, " + colorHex + " " + pct + "%, #2D273B " + pct + "%, #2D273B 100%)";
+        }
+
+        function renderCompensa() {
+          slMinKm.value = state.minimoPorKm;
+          slBomKm.value = state.bomPorKm;
+          slMinHora.value = state.minimoPorHora;
+          slBomHora.value = state.bomPorHora;
+          slBusca.value = state.buscaMaximaKm;
+          slCusto.value = state.custoPorKm;
+
+          document.getElementById("val-min-km").textContent = formatarReaisComCentavos(state.minimoPorKm);
+          document.getElementById("val-bom-km").textContent = formatarReaisComCentavos(state.bomPorKm);
+          document.getElementById("val-min-hora").textContent = formatarReaisInteiro(state.minimoPorHora);
+          document.getElementById("val-bom-hora").textContent = formatarReaisInteiro(state.bomPorHora);
+          document.getElementById("val-busca").textContent = formatarBuscaKm(state.buscaMaximaKm);
+          document.getElementById("val-custo").textContent = formatarReaisComCentavos(state.custoPorKm);
+
+          paintSliderTrack(slMinKm, "#E74C3C");
+          paintSliderTrack(slBomKm, "#2ECC71");
+          paintSliderTrack(slMinHora, "#E74C3C");
+          paintSliderTrack(slBomHora, "#2ECC71");
+          paintSliderTrack(slBusca, "#8E44FF");
+          paintSliderTrack(slCusto, "#8E44FF");
+
+          // Live example: Corrida de R$ 15 com 8 km e 20 min -> 188 centavos/km e 4500 centavos/h
+          var porKm = Math.round(1500 / 8); // 188
+          var porHora = Math.round((1500 * 60) / 20); // 4500
+
+          var status = "AMARELO";
+          var color = "#F1C40F";
+          var colorClass = "c-yellow";
+          var bgRgba = "rgba(241, 196, 15, 0.16)";
+          var borderRgba = "rgba(241, 196, 15, 0.55)";
+
+          if (porKm < state.minimoPorKm || porHora < state.minimoPorHora) {
+            status = "VERMELHO";
+            color = "#E74C3C";
+            colorClass = "c-red";
+            bgRgba = "rgba(231, 76, 60, 0.16)";
+            borderRgba = "rgba(231, 76, 60, 0.55)";
+          } else if (porKm >= state.bomPorKm && porHora >= state.bomPorHora) {
+            status = "VERDE";
+            color = "#2ECC71";
+            colorClass = "c-green";
+            bgRgba = "rgba(46, 204, 113, 0.16)";
+            borderRgba = "rgba(46, 204, 113, 0.55)";
+          }
+
+          var liveCard = document.getElementById("live-card");
+          var liveBadge = document.getElementById("live-badge");
+          var liveWord = document.getElementById("live-status-word");
+
+          liveCard.style.borderColor = borderRgba;
+          liveBadge.textContent = status;
+          liveBadge.style.color = color;
+          liveBadge.style.background = bgRgba;
+          liveWord.textContent = status;
+          liveWord.className = colorClass;
+        }
+
+        slMinKm.addEventListener("input", function () {
+          state.minimoPorKm = parseInt(slMinKm.value, 10);
+          if (state.bomPorKm < state.minimoPorKm) {
+            state.bomPorKm = state.minimoPorKm;
+          }
+          renderCompensa();
+        });
+
+        slBomKm.addEventListener("input", function () {
+          state.bomPorKm = parseInt(slBomKm.value, 10);
+          if (state.minimoPorKm > state.bomPorKm) {
+            state.minimoPorKm = state.bomPorKm;
+          }
+          renderCompensa();
+        });
+
+        slMinHora.addEventListener("input", function () {
+          state.minimoPorHora = parseInt(slMinHora.value, 10);
+          if (state.bomPorHora < state.minimoPorHora) {
+            state.bomPorHora = state.minimoPorHora;
+          }
+          renderCompensa();
+        });
+
+        slBomHora.addEventListener("input", function () {
+          state.bomPorHora = parseInt(slBomHora.value, 10);
+          if (state.minimoPorHora > state.bomPorHora) {
+            state.minimoPorHora = state.bomPorHora;
+          }
+          renderCompensa();
+        });
+
+        slBusca.addEventListener("input", function () {
+          state.buscaMaximaKm = parseFloat(slBusca.value);
+          renderCompensa();
+        });
+
+        slCusto.addEventListener("input", function () {
+          state.custoPorKm = parseInt(slCusto.value, 10);
+          renderCompensa();
+        });
+
+        // Chips management
+        var chipsContainer = document.getElementById("chips-container");
+        var inputBairro = document.getElementById("input-bairro");
+        var btnAddBairro = document.getElementById("btn-add-bairro");
+
+        function renderChips() {
+          chipsContainer.innerHTML = "";
+          state.bairrosEvitados.forEach(function (bairro) {
+            var chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "bairro-chip";
+            chip.setAttribute("aria-label", "Remover " + bairro);
+
+            var label = document.createElement("span");
+            label.className = "single-line";
+            label.textContent = bairro;
+
+            var x = document.createElement("span");
+            x.className = "chip-x";
+            x.setAttribute("aria-hidden", "true");
+            x.textContent = "×";
+
+            chip.appendChild(label);
+            chip.appendChild(x);
+            chip.addEventListener("click", function () {
+              state.bairrosEvitados = state.bairrosEvitados.filter(function (b) {
+                return b !== bairro;
+              });
+              renderChips();
+            });
+            chipsContainer.appendChild(chip);
+          });
+        }
+
+        function addBairro() {
+          var limpo = inputBairro.value.trim();
+          if (
+            limpo.length > 0 &&
+            !state.bairrosEvitados.some(function (b) {
+              return b.toLowerCase() === limpo.toLowerCase();
+            })
+          ) {
+            state.bairrosEvitados.push(limpo);
+            renderChips();
+          }
+          inputBairro.value = "";
+          btnAddBairro.disabled = true;
+        }
+
+        inputBairro.addEventListener("input", function () {
+          btnAddBairro.disabled = inputBairro.value.trim().length === 0;
+        });
+
+        inputBairro.addEventListener("keydown", function (e) {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            addBairro();
+          }
+        });
+
+        btnAddBairro.addEventListener("click", addBairro);
+
+        // Save button feedback
+        var saveFeedback = document.getElementById("save-feedback");
+        var saveTimer = null;
+        document.getElementById("btn-salvar").addEventListener("click", function () {
+          saveFeedback.textContent =
+            "Salvo: " +
+            formatarReaisComCentavos(state.minimoPorKm) +
+            "–" +
+            formatarReaisComCentavos(state.bomPorKm) +
+            "/km · " +
+            formatarReaisInteiro(state.minimoPorHora) +
+            "–" +
+            formatarReaisInteiro(state.bomPorHora) +
+            "/h";
+          saveFeedback.classList.add("visible");
+          if (saveTimer) clearTimeout(saveTimer);
+          saveTimer = setTimeout(function () {
+            saveFeedback.classList.remove("visible");
+          }, 2600);
+        });
+
+        renderChips();
+        renderCompensa();
+      })();
+    </script>
   </body>
 </html>
-
