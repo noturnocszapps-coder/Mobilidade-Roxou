@@ -127,6 +127,7 @@ class FloatingPanel(
     }
 
     fun showOffer(e: OfferEvaluation) {
+        if (tentative) { tentative = false; handler.removeCallbacks(endTentative) }
         val isNew = evaluation?.offer?.key != e.offer.key
         evaluation = e
         hasAddress = e.offer.pickupAddress != null || e.offer.dropoffAddress != null
@@ -147,8 +148,24 @@ class FloatingPanel(
         handler.postDelayed(hide, 1_000)
     }
 
+    private var tentative = false
+    private val endTentative = Runnable { if (tentative) { tentative = false; setMode(Mode.NONE) } }
+
+    /** A oferta saiu e o app não viu o aceite: mostra Embarque/Destino e ✔ por 15 s, caso tenha aceitado. */
+    fun maybeAccepted() {
+        if (!hasAddress || mode == Mode.WAZE) return
+        tentative = true
+        nextIsDropoff = false
+        handler.removeCallbacks(hide)
+        handler.removeCallbacks(endTentative)
+        handler.postDelayed(endTentative, 15_000)
+        setMode(Mode.WAZE)
+    }
+
     /** A corrida foi aceita e gravada: some o ✔ e, se o motorista quiser, fica só o Waze. */
     fun markLogged() {
+        tentative = false
+        handler.removeCallbacks(endTentative)
         logged = true
         if (PanelPrefs.wazeAfterAccept(context) && hasAddress) {
             handler.removeCallbacks(hide)
@@ -272,7 +289,7 @@ class FloatingPanel(
         mainView.visibility = if (offerMode) View.VISIBLE else View.GONE
         detailView.visibility = if (offerMode) View.VISIBLE else View.GONE
         if (!offerMode) alertView.visibility = View.GONE
-        acceptButton.visibility = if (logged || !offerMode) View.GONE else View.VISIBLE
+        acceptButton.visibility = if (logged || !(offerMode || tentative)) View.GONE else View.VISIBLE
         // O próximo passo fica aceso; o outro fica apagado (mas continua funcionando).
         pickupButton.alpha = if (nextIsDropoff) 0.45f else 1f
         dropoffButton.alpha = if (nextIsDropoff) 1f else 0.45f

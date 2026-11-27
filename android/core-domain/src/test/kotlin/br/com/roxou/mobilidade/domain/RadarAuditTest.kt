@@ -73,4 +73,48 @@ class RadarAuditTest {
         assertEquals(Platform.UBER, OfferParser.platformHint(listOf(l("Business Comfort", 1))))
         assertNull(OfferParser.platformHint(listOf(l("Rua Tal, 10", 1))))
     }
+
+    /** Tela real da 99 depois do aceite (print do Fernando, 27/11 19:43): navegação até o embarque. */
+    private val navegacao99 = listOf(
+        l("457 m", 180), l("Rotatória", 280),
+        l("Shopping Pão, Avenida Ademar de", 420), l("Barros, 830, Jardim Aviação", 470),
+        l("Ir", 590), l("Street View", 760), l("2 min · 662 m", 1740), l("Chegue antes de 19:48", 1800),
+    )
+
+    @Test fun aceite_na_99_pela_navegacao() {
+        val d = br.com.roxou.mobilidade.domain.offer.AcceptDetector
+        assertTrue(d.looksAccepted(navegacao99))
+        assertTrue(d.mentionsStreet(navegacao99, "Shopping Pão, Avenida Ademar de Barros, 830"))
+        assertTrue(d.mentionsStreet(listOf(l("Rua Bartira, 110, Vila Maristela", 400)), "Rua Bartira, 110 , Vila Maristela"))
+        assertFalse(d.mentionsStreet(navegacao99, "Rua João da Silva Espinhosa, 12, Uep5-S.2"))
+    }
+
+    @Test fun oferta_da_99_com_parada_e_negocia() {
+        val parada = listOf(
+            l("Dinheiro", 470, left = 87), l("R$11,40 1,1x", 590, left = 67, h = 100), l("R$1,62/km", 720, left = 67),
+            l("0% de Taxa99 semanal", 860, left = 130), l("R$1,97 Tarifa base dinâmica incl.", 940, left = 130),
+            l("Taxa de parada de R$0,70 inclusa", 1020, left = 130), l("4,94 · 768 corridas", 1160, left = 130),
+            l("5 min (1,5 km)", 1370, left = 130), l("Rua São Sebastião, 517, Vila", 1420, left = 130), l("Machadinho", 1470, left = 130),
+            l("1 parada(s)", 1550, left = 130), l("11 min (5,5 km)", 1630, left = 130),
+            l("Rua João da Silva Espinhosa, 12,", 1690, left = 130), l("Uep5-S.2", 1745, left = 130),
+        )
+        val o = OfferParser.parse(parada, Platform.NINETY_NINE)!!
+        assertEquals(11_40L, o.fareCents)
+        assertEquals(1.5 + 5.5, o.pickupKm + o.tripKm, 1e-9)
+        assertEquals(4.94, o.passengerRating!!, 1e-9)
+        val e = OfferEvaluator.evaluate(o, OfferRules())
+        assertEquals(163L, e.perKmCents)
+        assertEquals(16, e.totalMinutes)
+        val negocia = listOf(
+            l("Negocia · Dinheiro", 550, left = 87), l("R$9,67", 680, left = 67, h = 110),
+            l("4,96 · 313 corridas", 1010, left = 130), l("8 min (2,7 km)", 1150, left = 130),
+            l("José Rainho Teixeira, 109 , Vila", 1200, left = 130), l("Marcondes", 1255, left = 130),
+            l("13 min (7,5 km)", 1330, left = 130), l("Rua Francisco dos Santos", 1380, left = 130),
+            l("Cavalheiro, 63, Uep5-S.2", 1435, left = 130), l("Aceitar por R$9,67", 1560, left = 270),
+            l("R$10,15 R$10,44 R$10,64", 1700, left = 70),
+        )
+        val n = OfferParser.parse(negocia, Platform.NINETY_NINE)!!
+        assertEquals(9_67L, n.fareCents)
+        assertEquals(95L, OfferEvaluator.evaluate(n, OfferRules()).perKmCents)
+    }
 }

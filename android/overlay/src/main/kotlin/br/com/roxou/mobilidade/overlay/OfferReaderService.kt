@@ -175,7 +175,7 @@ class OfferReaderService : AccessibilityService() {
         if (shotPending) return
         when {
             // Ainda não leu: tenta até 8 vezes (o cartão anima ao entrar).
-            readKey == null && triesThisOffer < 8 -> shoot(if (triesThisOffer == 0) 600L else 1_100L, found, byScan = false)
+            readKey == null && triesThisOffer < 8 -> shoot(if (triesThisOffer == 0) 400L else 1_100L, found, byScan = false)
             readKey == null && triesThisOffer == 8 -> { triesThisOffer++; Diag.discard("${appName(found)}: cartão na tela, mas 8 leituras sem achar valor e os dois tempos") }
             // Já leu: confere a cada 3 s se a oferta mudou (a próxima pode vir sem o cartão sumir).
             readKey != null && now - readAt > 3_000 && rereads < 10 -> { rereads++; shoot(0, found, byScan = false) }
@@ -298,13 +298,24 @@ class OfferReaderService : AccessibilityService() {
         handler.postDelayed({
             if (offer.key != lastOffer?.key || offer.key in loggedKeys) return@postDelayed
             screenshotText(null) { lines ->
+                val accepted = lines != null && (
+                    AcceptDetector.looksAccepted(lines) ||
+                        // A navegação da 99 até o passageiro mostra a rua do embarque desta oferta.
+                        AcceptDetector.mentionsStreet(lines, offer.pickupAddress)
+                    )
                 when {
-                    lines != null && AcceptDetector.looksAccepted(lines) -> logAccepted(byButton = false)
-                    attempt == 0 -> checkAcceptedSoon(1)
-                    else -> record(OfferOutcome.REJECTED)
+                    accepted -> logAccepted(byButton = false)
+                    attempt < 2 -> checkAcceptedSoon(attempt + 1)
+                    else -> {
+                        Diag.log("Aceite não detectado depois que a oferta saiu (3 leituras)")
+                        record(OfferOutcome.REJECTED)
+                        // Pode ter aceitado numa tela que o app não conhece: deixa Embarque/Destino e o ✔
+                        // por alguns segundos. Tocar em um deles conta como aceite.
+                        panel?.maybeAccepted()
+                    }
                 }
             }
-        }, if (attempt == 0) 1_500 else 2_500)
+        }, when (attempt) { 0 -> 1_500L; 1 -> 2_500L; else -> 4_000L })
     }
 
     private fun record(outcome: OfferOutcome) {
@@ -346,8 +357,10 @@ class OfferReaderService : AccessibilityService() {
             shotPending = false
             if (lines == null) return@screenshotText
             when {
-                AcceptDetector.looksEnded(lines) -> p.rideEnded()
+                AcceptDetector.looksEnded(lines) -> { p.rideEnded(); RideNotification.hide(this) }
                 AcceptDetector.looksOnTrip(lines) -> p.passengerOnBoard()
+                // Navegação mostrando a rua do destino (e não mais a do embarque): passageiro a bordo.
+                AcceptDetector.mentionsStreet(lines, acceptedDropoff) && !AcceptDetector.mentionsStreet(lines, acceptedPickup) -> p.passengerOnBoard()
             }
         }
     }
@@ -362,6 +375,10 @@ class OfferReaderService : AccessibilityService() {
     }
 
     private fun openWaze(toDropoff: Boolean) {
+        val o = lastOffer
+        if (o != null && o.key !in loggedKeys && !offerVisible && SystemClock.uptimeMillis() - lastOfferShownAt < 5 * 60_000) {
+            logAccepted(byButton = true) // tocou em Embarque/Destino depois que a oferta saiu: aceitou
+        }
         val fresh = SystemClock.uptimeMillis() - addressesAt < 60 * 60_000
         val remembered = if (!fresh) null else if (toDropoff) dropoffAddress else pickupAddress
         if (remembered != null) {

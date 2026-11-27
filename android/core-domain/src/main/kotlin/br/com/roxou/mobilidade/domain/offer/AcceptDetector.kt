@@ -14,6 +14,8 @@ object AcceptDetector {
         "a caminho", "iniciar viagem", "iniciar corrida", "cheguei", "chegou ao local",
         "buscar passageiro", "busque o passageiro", "ir ate", "aguardando passageiro",
         "passageiro aguardando", "embarque em", "pegar ", "deslize para iniciar",
+        // 99 (navegação própria até o embarque, visto em 27/11): "Chegue antes de 19:48".
+        "chegue antes de", "a caminho do embarque", "local de embarque", "passageiro te espera",
     )
     private val stillLooking = listOf("procurando", "buscando viagens", "buscando corridas", "voce esta online", "ficar offline")
 
@@ -34,6 +36,19 @@ object AcceptDetector {
     fun looksEnded(lines: List<OcrLine>): Boolean {
         val text = " " + lines.joinToString(" ") { AreaFilter.normalize(it.text) } + " "
         return endedWords.any { text.contains(it) } || stillLooking.any { text.contains(it) }
+    }
+
+    /**
+     * A tela fala da rua deste endereço? Ex.: depois do aceite, a navegação da 99 mostra a rua do embarque;
+     * com o passageiro a bordo, mostra a rua do destino. Compara só o nome da rua (antes da 1ª vírgula).
+     */
+    fun mentionsStreet(lines: List<OcrLine>, address: String?): Boolean {
+        val street = address?.substringBefore(',')?.let(AreaFilter::normalize)
+            ?.replace(Regex("^(rua|r|av|avenida|al|alameda|travessa|tv|praca|rod|rodovia|estrada)\\s+"), "")
+            ?.trim().orEmpty()
+        if (street.length < 6) return false
+        val text = " " + lines.joinToString(" ") { AreaFilter.normalize(it.text) } + " "
+        return text.contains(street)
     }
 
     fun looksAccepted(lines: List<OcrLine>): Boolean {
