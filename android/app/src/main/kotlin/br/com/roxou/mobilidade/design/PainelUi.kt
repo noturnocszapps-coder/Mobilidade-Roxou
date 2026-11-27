@@ -13,4 +13,5 @@ data class PainelUi(
     val descontoGarantidoCentavos: Long,
     val parcelaFaltaCentavos: Long?,
     val dinheiroLivreCentavos: Long,
+    val recursos: Recursos,
 )

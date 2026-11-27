@@ -10,6 +10,7 @@ import br.com.roxou.mobilidade.data.AppState
 import br.com.roxou.mobilidade.data.RoxouRepository
 import br.com.roxou.mobilidade.design.PainelScreen
 import br.com.roxou.mobilidade.design.PainelUi
+import br.com.roxou.mobilidade.design.Recursos
 import br.com.roxou.mobilidade.design.RoxouDesignTheme
 import br.com.roxou.mobilidade.domain.model.Platform
 import br.com.roxou.mobilidade.domain.summary.Snapshot
@@ -25,14 +26,14 @@ class DashboardViewModel(repo: RoxouRepository) : ViewModel() {
 
 /** Painel do turno. O visual vem do AI Studio (pasta design/); aqui só liga os dados reais. */
 @Composable
-fun DashboardScreen(repo: RoxouRepository) {
+fun DashboardScreen(repo: RoxouRepository, recursos: Recursos) {
     val vm: DashboardViewModel = viewModel { DashboardViewModel(repo) }
     val state by vm.state.collectAsStateWithLifecycle()
     val s = state?.snapshot ?: return
-    RoxouDesignTheme { PainelScreen(s.toPainelUi()) }
+    RoxouDesignTheme { PainelScreen(s.toPainelUi(recursos)) }
 }
 
-internal fun Snapshot.toPainelUi(): PainelUi {
+internal fun Snapshot.toPainelUi(recursos: Recursos): PainelUi {
     val day = workday.dayOfWeek.shortPt().replaceFirstChar { it.uppercase() }
     return PainelUi(
         diaTexto = "$day ${formatDayMonth(workday)}",
@@ -47,5 +48,6 @@ internal fun Snapshot.toPainelUi(): PainelUi {
         descontoGarantidoCentavos = tiers?.achievedDiscountCents ?: 0,
         parcelaFaltaCentavos = installment?.pendingCents,
         dinheiroLivreCentavos = financeWeek.availableCashCents,
+        recursos = recursos,
     )
 }

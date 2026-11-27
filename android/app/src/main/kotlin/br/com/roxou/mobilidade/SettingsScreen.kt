@@ -203,7 +203,7 @@ private fun ReaderCard() {
     }
 }
 
-private fun isReaderOn(context: Context): Boolean {
+internal fun isReaderOn(context: Context): Boolean {
     val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
     return enabled.split(':').any { it.contains(context.packageName) && it.contains("OfferReaderService") }
 }
