@@ -117,4 +117,22 @@ class RadarAuditTest {
         assertEquals(9_67L, n.fareCents)
         assertEquals(95L, OfferEvaluator.evaluate(n, OfferRules()).perKmCents)
     }
+
+    /** Print do Fernando (27/11): "4 min (1.5 km)" lido como "4 min (15 km)" deu R$ 0,62/km. */
+    @Test fun uber_ponto_decimal_perdido_no_ocr() {
+        val lines = listOf(
+            l("UberX", 1000), l("R$ 12,02", 1100, h = 120), l("* 5,00 (117)", 1260),
+            l("4 min (15 km)", 1420), l("R. Tal, 10, Presidente Prudente", 1480),
+            l("10 minutos (4.5 km)", 1620), l("Av. Outra, 20, Presidente Prudente", 1680),
+            l("Tenho interesse", 1990),
+        )
+        val o = OfferParser.parse(lines, Platform.UBER)!!
+        assertEquals(1.5, o.pickupKm, 1e-9)
+        assertEquals(4.5, o.tripKm, 1e-9)
+        val e = OfferEvaluator.evaluate(o, OfferRules())
+        assertEquals(6.0, e.totalKm, 1e-9)
+        assertEquals(14, e.totalMinutes)
+        assertEquals(200L, e.perKmCents)
+        assertFalse(e.timeEstimated)
+    }
 }
