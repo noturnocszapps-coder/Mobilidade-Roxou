@@ -30,7 +30,7 @@ class LeituraAccessibilityService : AccessibilityService() {
 
     override fun onCreate() {
         super.onCreate()
-        prefsManager = PreferencesManager(this)
+        prefsManager = PreferencesManager.get(this)
         database = AppDatabase.getDatabase(this)
     }
 
