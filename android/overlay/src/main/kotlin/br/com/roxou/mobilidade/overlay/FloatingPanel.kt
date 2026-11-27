@@ -51,13 +51,18 @@ class FloatingPanel(
         textSize = size
         setTextColor(color)
         if (bold) typeface = Typeface.DEFAULT_BOLD
-        maxWidth = dp(300)
     }
 
-    private val verdictView = text(17f, bold = true)
-    private val mainView = text(22f, bold = true)
-    private val detailView = text(13f, Color.parseColor("#BBBBBB"))
-    private val reasonView = text(13f, Color.parseColor("#DDDDDD"))
+    private fun TextView.oneLine() = apply {
+        maxLines = 1
+        ellipsize = android.text.TextUtils.TruncateAt.END
+    }
+
+    private val verdictView = text(17f, bold = true).oneLine()
+    private val mainView = text(24f, bold = true).oneLine()
+    private val detailView = text(14f, Color.parseColor("#DDDDDD")).oneLine()
+    private val moneyView = text(13f, Color.parseColor("#AAAAAA")).oneLine()
+    private val reasonView = text(13f, Color.parseColor("#CCCCCC")).apply { maxLines = 2 }
     private val areaView = text(15f, bold = true).apply {
         setPadding(dp(8), dp(4), dp(8), dp(4))
         background = GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(red) }
@@ -82,12 +87,12 @@ class FloatingPanel(
         setPadding(dp(12), dp(8), dp(12), dp(10))
         background = panelBg
         alpha = 0.95f
-        listOf(verdictView, mainView, detailView, reasonView, areaView).forEach { addView(it) }
+        listOf(verdictView, mainView, detailView, moneyView, reasonView, areaView).forEach { addView(it) }
         addView(buttons, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(6) })
     }
 
     private val params = WindowManager.LayoutParams(
-        WindowManager.LayoutParams.WRAP_CONTENT,
+        dp(250), // largura fixa: o texto quebra ou encurta dentro dela, nunca some na borda
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
@@ -95,7 +100,8 @@ class FloatingPanel(
     ).apply {
         gravity = Gravity.TOP or Gravity.START
         x = prefs.getInt("x", dp(12))
-        y = prefs.getInt("y", dp(90))
+        // Padrão: canto de cima à esquerda, acima do cartão da oferta e longe do X da 99.
+        y = prefs.getInt("y", dp(32))
     }
 
     private var attached = false
@@ -178,18 +184,16 @@ class FloatingPanel(
         panelBg.setStroke(dp(3), color)
         verdictView.setTextColor(color)
         verdictView.text = when {
-            e.blocked -> "⛔ BAIRRO QUE VOCÊ NÃO QUER"
+            e.blocked -> "⛔ BAIRRO EVITADO"
             e.verdict == Verdict.GOOD -> "✔ COMPENSA"
             e.verdict == Verdict.BORDERLINE -> "≈ NO LIMITE"
             else -> "✖ NÃO COMPENSA"
         }
         val perKm = String.format(pt, "%.2f", e.perKmCents / 100.0)
         val perHour = String.format(pt, "%.0f", e.perHourCents / 100.0)
-        mainView.text = "R$ $perKm/km · R$ $perHour/h"
-        detailView.text = String.format(
-            pt, "%s · %.1f km · %d min · sobra %s",
-            OfferEvaluator.money(e.offer.fareCents), e.totalKm, e.totalMinutes, OfferEvaluator.money(e.netCents),
-        )
+        mainView.text = "R$ $perKm/km"
+        detailView.text = String.format(pt, "R$ %s/h · %.1f km · %d min", perHour, e.totalKm, e.totalMinutes)
+        moneyView.text = "Valor ${OfferEvaluator.money(e.offer.fareCents)} · sobra ${OfferEvaluator.money(e.netCents)}"
         reasonView.text = e.reason
 
         val blockedArea = listOf(e.pickupArea, e.dropoffArea).firstOrNull { it.blocked }
@@ -217,7 +221,10 @@ class FloatingPanel(
         verdictView.visibility = if (expanded || e.blocked) View.VISIBLE else View.GONE
         detailView.visibility = if (expanded) View.VISIBLE else View.GONE
         reasonView.visibility = if (expanded) View.VISIBLE else View.GONE
-        mainView.textSize = if (expanded) 22f else 16f
+        moneyView.visibility = if (expanded) View.VISIBLE else View.GONE
+        mainView.textSize = if (expanded) 24f else 18f
+        params.width = if (expanded || e.blocked) dp(250) else WindowManager.LayoutParams.WRAP_CONTENT
+        root.requestLayout()
         if (attached) runCatching { wm.updateViewLayout(root, params) }
     }
 
