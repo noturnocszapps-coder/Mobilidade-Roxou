@@ -45,6 +45,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.core.content.ContextCompat
+import br.com.roxou.mobilidade.overlay.PanelPrefs
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -89,6 +97,13 @@ private fun RadarToggle(repo: RoxouRepository, notaMinima: Double) {
     var segundoPlano by remember { mutableStateOf(false) }
     var bateriaOk by remember { mutableStateOf(bateriaLiberada(context)) }
     var voltou by remember { mutableStateOf(0) }
+    // Pede uma vez a permissão de notificação (Android 13+), para a notificação da corrida com Embarque e Destino.
+    val pedirNotificacao = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 33 && PanelPrefs.rideNotification(context) &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) pedirNotificacao.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
     LifecycleResumeEffect(Unit) {
         bateriaOk = bateriaLiberada(context)
         voltou++

@@ -1,6 +1,7 @@
 package br.com.roxou.mobilidade.overlay
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Build
@@ -72,6 +73,7 @@ class OfferReaderService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         repo = RoxouRepository.get(this)
+        instance = this
         panel = FloatingPanel(this, ::openWaze) { logAccepted(byButton = true) }
         scope.launch { repo.state.collect { state = it } }
     }
@@ -204,7 +206,21 @@ class OfferReaderService : AccessibilityService() {
         scope.launch { repo.saveTrip(trip) }
         record(OfferOutcome.ACCEPTED)
         panel?.markLogged()
+        acceptedPickup = offer.pickupAddress
+        acceptedDropoff = offer.dropoffAddress
+        if (PanelPrefs.rideNotification(this) && (offer.pickupAddress != null || offer.dropoffAddress != null)) {
+            RideNotification.show(this, listOfNotNull(offer.pickupAddress, offer.dropoffAddress).joinToString(" → "))
+        }
         toast(if (byButton) "Corrida registrada (a confirmar)" else "Aceite detectado: corrida registrada (a confirmar)")
+    }
+
+    /** Endereços da corrida aceita (para a notificação), só na memória. */
+    private var acceptedPickup: String? = null
+    private var acceptedDropoff: String? = null
+
+    private fun openAccepted(toDropoff: Boolean) {
+        val addr = if (toDropoff) acceptedDropoff else acceptedPickup
+        if (addr != null) go(addr) else openWaze(toDropoff)
     }
 
     private fun openWaze(toDropoff: Boolean) {
@@ -284,6 +300,7 @@ class OfferReaderService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         handler.removeCallbacksAndMessages(null)
         panel?.destroy()
         panel = null
@@ -292,6 +309,19 @@ class OfferReaderService : AccessibilityService() {
     }
 
     companion object {
+        @Volatile private var instance: OfferReaderService? = null
+
+        /** Chamado pelos botões da notificação. Sem o serviço ligado, os endereços não existem mais. */
+        fun openMapFromOutside(context: Context, toDropoff: Boolean) {
+            val s = instance
+            if (s == null) {
+                Toast.makeText(context, "Ligue o Radar para abrir o mapa", Toast.LENGTH_SHORT).show()
+                RideNotification.hide(context)
+            } else {
+                s.handler.post { s.openAccepted(toDropoff) }
+            }
+        }
+
         const val UBER = "com.ubercab.driver"
         const val NINETY_NINE = "com.app99.driver"
         val DRIVER_APPS = setOf(UBER, NINETY_NINE)

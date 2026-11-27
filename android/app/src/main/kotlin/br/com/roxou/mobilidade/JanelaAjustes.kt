@@ -1,6 +1,11 @@
 package br.com.roxou.mobilidade
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import br.com.roxou.mobilidade.overlay.Waze
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -82,6 +87,9 @@ fun JanelaAjustesDialog(repo: RoxouRepository, notaMinima: Double, onFechar: () 
     var segundos by remember { mutableIntStateOf(PanelPrefs.seconds(context)) }
     var waze by remember { mutableStateOf(PanelPrefs.wazeAfterAccept(context)) }
     var nota by remember { mutableStateOf(notaMinima) }
+    var mapa by remember { mutableStateOf(PanelPrefs.mapApp(context)) }
+    var notificacao by remember { mutableStateOf(PanelPrefs.rideNotification(context)) }
+    val pedirNotificacao = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     AlertDialog(
         onDismissRequest = onFechar,
@@ -118,9 +126,31 @@ fun JanelaAjustesDialog(repo: RoxouRepository, notaMinima: Double, onFechar: () 
                 }
                 Ajuda("Abaixo dessa nota a janela avisa e a cor piora um nível.")
 
-                Titulo("Waze depois do aceite")
+                Titulo("Mapa para Embarque e Destino")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Waze.MapApp.entries.forEach { m ->
+                        Opcao(m.label, mapa == m) { mapa = m; PanelPrefs.setMapApp(context, m) }
+                    }
+                }
+
+                Titulo("Notificação da corrida")
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Ajuda("Deixar os botões Embarque e Destino na tela depois que você aceitar", Modifier.weight(1f))
+                    Ajuda("Depois do aceite, deixa Embarque e Destino na barra de notificações, para abrir o mapa a qualquer hora", Modifier.weight(1f))
+                    Switch(
+                        checked = notificacao,
+                        onCheckedChange = {
+                            notificacao = it
+                            PanelPrefs.setRideNotification(context, it)
+                            if (it && Build.VERSION.SDK_INT >= 33) pedirNotificacao.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        },
+                        colors = SwitchDefaults.colors(checkedTrackColor = RoxouColors.Green, checkedThumbColor = Color.White),
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
+
+                Titulo("Botões na tela depois do aceite")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Ajuda("Deixa uma janelinha com Embarque e Destino em cima do app da Uber/99", Modifier.weight(1f))
                     Switch(
                         checked = waze,
                         onCheckedChange = { waze = it; PanelPrefs.setWazeAfterAccept(context, it) },
