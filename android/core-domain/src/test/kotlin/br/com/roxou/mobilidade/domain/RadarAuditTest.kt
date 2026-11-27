@@ -135,4 +135,19 @@ class RadarAuditTest {
         assertEquals(200L, e.perKmCents)
         assertFalse(e.timeEstimated)
     }
+
+    /** Print do Fernando (27/11): esta saiu certa e tem que continuar igual. */
+    @Test fun uber_com_ponto_lido_certo_nao_muda() {
+        val lines = listOf(
+            l("UberX", 1000), l("R$ 21,06", 1100, h = 120), l("* 4,95 (80)", 1260),
+            l("10 min (5.9 km)", 1420), l("R. Tal, 10, Presidente Prudente", 1480),
+            l("15 minutos (8.5 km)", 1620), l("Av. Outra, 20, Presidente Prudente", 1680),
+            l("Tenho interesse", 1990),
+        )
+        val e = OfferEvaluator.evaluate(OfferParser.parse(lines, Platform.UBER)!!, OfferRules())
+        assertEquals(14.4, e.totalKm, 1e-9)
+        assertEquals(25, e.totalMinutes)
+        assertEquals(146L, e.perKmCents)
+        assertEquals(50_54L, e.perHourCents)
+    }
 }
