@@ -25,6 +25,6 @@ O app **nunca aceita nem recusa corridas**. Ele só registra e calcula.
 
 ## Compilar
 
-O GitHub Actions (`.github/workflows/android.yml`) roda os testes e gera o APK a cada push. O APK fica em **Actions → última execução → Artifacts → roxou-mobilidade-apk**.
+O GitHub Actions (`.github/workflows/build-apk.yml`) roda os testes e gera o APK. Na `main`, o APK sai solto na release **ultima-versao**; em PRs, fica em **Actions → execução → Artifacts → roxou-mobilidade-apk**.
 
 Localmente: `./gradlew :core-domain:test assembleDebug` (precisa do Android SDK).

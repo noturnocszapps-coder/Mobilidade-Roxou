@@ -4,6 +4,10 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// No GitHub Actions, cada execução ganha um número maior (GITHUB_RUN_NUMBER),
+// para o Android aceitar o APK novo como atualização do anterior.
+val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+
 android {
     namespace = "br.com.roxou.mobilidade"
     compileSdk = 35
@@ -12,11 +16,26 @@ android {
         applicationId = "br.com.roxou.mobilidade"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.2.0"
+        versionCode = buildNumber
+        versionName = "0.2.$buildNumber"
+    }
+
+    signingConfigs {
+        // Chave de debug fixa, guardada no repositório. Sem ela, cada build do
+        // GitHub Actions teria uma assinatura diferente e o celular recusaria a
+        // atualização ("app não instalado"). Serve só para debug, nunca para a Play Store.
+        getByName("debug") {
+            storeFile = rootProject.file("keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
         }
