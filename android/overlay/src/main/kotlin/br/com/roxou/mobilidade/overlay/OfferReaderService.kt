@@ -108,6 +108,15 @@ class OfferReaderService : AccessibilityService() {
             return
         }
         val type = event.eventType
+        // Toque no botão "Aceitar" da Uber/99 (quando o app entrega esse evento): registra o aceite na hora.
+        if (type == AccessibilityEvent.TYPE_VIEW_CLICKED && pkg in DRIVER_APPS) {
+            val t = (event.text.joinToString(" ") + " " + (event.contentDescription ?: "")).lowercase()
+            if (("aceitar" in t || "accept" in t) && lastOffer != null && SystemClock.uptimeMillis() - lastOfferShownAt < 60_000) {
+                Diag.log("Toque em Aceitar visto pela acessibilidade")
+                logAccepted(byButton = false)
+            }
+            return
+        }
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg !in IGNORED && pkg != packageName) {
             panel?.setDriverAppOnScreen(pkg in DRIVER_APPS)
         }
@@ -194,7 +203,11 @@ class OfferReaderService : AccessibilityService() {
         Diag.log("Cartão de oferta na tela: ${appName(pkg)} ($how)")
     }
 
+    /** Depois que a oferta sai, toda leitura da tela por 60 s também procura sinais de aceite. */
+    private var acceptWatchUntil = 0L
+
     private fun endOffer(why: String) {
+        acceptWatchUntil = SystemClock.uptimeMillis() + 60_000
         offerVisible = false
         offerByScan = false
         readKey = null
@@ -231,7 +244,10 @@ class OfferReaderService : AccessibilityService() {
         if (offer == null) {
             if (byScan) {
                 if (offerVisible && offerByScan) endOffer("leitura não achou mais a oferta")
-                else if (panel?.inRide == true) applyRideStage(lines)
+                else {
+                    watchAccept(lines)
+                    if (panel?.inRide == true) applyRideStage(lines)
+                }
             } else {
                 val legs = lines.count { Regex("""\d+\s*min""").containsMatchIn(it.text) && it.text.contains("(") }
                 val money = lines.count { it.text.contains("R$") }
@@ -307,9 +323,9 @@ class OfferReaderService : AccessibilityService() {
                     )
                 when {
                     accepted -> logAccepted(byButton = false)
-                    attempt < 2 -> checkAcceptedSoon(attempt + 1)
+                    attempt < 3 -> checkAcceptedSoon(attempt + 1)
                     else -> {
-                        Diag.log("Aceite não detectado depois que a oferta saiu (3 leituras)")
+                        Diag.log("Aceite não detectado depois que a oferta saiu (4 leituras)")
                         record(OfferOutcome.REJECTED)
                         // Pode ter aceitado numa tela que o app não conhece: deixa Embarque/Destino e o ✔
                         // por alguns segundos. Tocar em um deles conta como aceite.
@@ -317,7 +333,16 @@ class OfferReaderService : AccessibilityService() {
                     }
                 }
             }
-        }, when (attempt) { 0 -> 1_500L; 1 -> 2_500L; else -> 4_000L })
+        }, when (attempt) { 0 -> 1_200L; 1 -> 2_000L; 2 -> 3_000L; else -> 5_000L })
+    }
+
+    private fun watchAccept(lines: List<OcrLine>) {
+        val o = lastOffer ?: return
+        if (SystemClock.uptimeMillis() > acceptWatchUntil || o.key in loggedKeys) return
+        if (AcceptDetector.looksAccepted(lines) || AcceptDetector.mentionsStreet(lines, o.pickupAddress)) {
+            Diag.log("Aceite visto numa leitura depois que a oferta saiu")
+            logAccepted(byButton = false)
+        }
     }
 
     private fun record(outcome: OfferOutcome) {
@@ -341,7 +366,7 @@ class OfferReaderService : AccessibilityService() {
         if (PanelPrefs.rideNotification(this) && (offer.pickupAddress != null || offer.dropoffAddress != null)) {
             RideNotification.show(this, listOfNotNull(offer.pickupAddress, offer.dropoffAddress).joinToString(" → "))
         }
-        toast(if (byButton) "Corrida registrada (a confirmar)" else "Aceite detectado: corrida registrada (a confirmar)")
+        toast("Corrida aceita registrada")
     }
 
     private var lastStageCheck = 0L

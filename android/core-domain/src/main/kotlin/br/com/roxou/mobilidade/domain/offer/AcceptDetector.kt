@@ -57,7 +57,10 @@ object AcceptDetector {
         return acceptWords.any { text.contains(it) }
     }
 
-    /** Corrida aceita vira registro "a confirmar": só conta na meta depois de confirmada. */
+    /**
+     * Corrida aceita entra já confirmada (pedido do Fernando, 27/11): o app viu o aceite na tela
+     * ou o motorista tocou no botão. Se estiver errada, ele apaga na aba Corridas.
+     */
     fun toTrip(id: String, offer: ParsedOffer, at: Instant, byButton: Boolean) = Trip(
         id = id,
         platform = offer.platform,
@@ -68,7 +71,7 @@ object AcceptDetector {
         pickupMinutes = offer.pickupMinutes,
         tripMinutes = offer.tripMinutes,
         source = RecordSource.SCREEN_READER,
-        confirmed = false,
+        confirmed = true,
         notes = if (byButton) "Aceite marcado na janela" else "Aceite lido pela tela",
     )
 }

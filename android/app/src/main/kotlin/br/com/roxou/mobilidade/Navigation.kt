@@ -11,6 +11,11 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import br.com.roxou.mobilidade.overlay.OfferLog
+import br.com.roxou.mobilidade.domain.offer.OfferOutcome
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -170,8 +175,29 @@ fun RoxouNavHost(repo: RoxouRepository) {
                                 },
                             )
                         }
+                    // Ofertas que tocaram e não foram aceitas: entram na lista como "Recusada" (não contam na meta).
+                    val ctx = LocalContext.current
+                    val recusadas by produceState(emptyList<CorridaItem>(), st.records.trips.size, hoje) {
+                        value = withContext(Dispatchers.IO) {
+                            val aceitas = st.records.trips.map { it.amountCents to it.endedAt.epochSecond / 120 }.toSet()
+                            OfferLog.readAll(ctx)
+                                .filter { it.outcome == OfferOutcome.REJECTED && turnover.workday(it.at) == hoje }
+                                .filter { (it.fareCents to it.at.epochSecond / 120) !in aceitas }
+                                .map { r ->
+                                    CorridaItem(
+                                        id = "recusada:${r.id}",
+                                        app = "Recusada",
+                                        hora = horaFmt.format(r.at.atZone(BRASILIA)),
+                                        valorCentavos = r.fareCents,
+                                        km = r.totalKm,
+                                        confirmada = true,
+                                        origem = (if (r.platform == Platform.UBER) "Uber" else "99") + " · não aceita",
+                                    )
+                                }
+                        }
+                    }
                     CorridasScreen(
-                        itens = itens,
+                        itens = (itens + recusadas).sortedByDescending { it.hora },
                         onAdicionar = { novaCorrida = true },
                         onConfirmar = { id -> scope.launch { repo.setTripConfirmed(id, true) } },
                         onApagar = { id -> scope.launch { repo.deleteTrip(id) } },
