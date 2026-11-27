@@ -117,10 +117,18 @@ class FloatingPanel(
     private var logged = false
     /** Qual botão do Waze fica aceso: embarque primeiro, depois destino. */
     private var nextIsDropoff = false
+    /** Corrida aceita em andamento (continua valendo enquanto outra oferta aparece por cima). */
+    private var rideActive = false
+    private var rideOnBoard = false
 
     init {
         acceptButton.setOnClickListener { onAccepted() }
-        pickupButton.setOnClickListener { onWaze(false); nextIsDropoff = true; render() }
+        pickupButton.setOnClickListener {
+            onWaze(false)
+            nextIsDropoff = true
+            if (mode == Mode.WAZE && rideActive) rideOnBoard = true
+            render()
+        }
         dropoffButton.setOnClickListener { onWaze(true); nextIsDropoff = false; render() }
         hideView.setOnClickListener { setMode(Mode.NONE) }
         setupDrag()
@@ -149,11 +157,12 @@ class FloatingPanel(
     }
 
     private var tentative = false
-    private val endTentative = Runnable { if (tentative) { tentative = false; setMode(Mode.NONE) } }
+    val isTentative: Boolean get() = tentative
+    private val endTentative = Runnable { if (tentative) { tentative = false; backToRide() } }
 
     /** A oferta saiu e o app não viu o aceite: mostra Embarque/Destino e ✔ por 15 s, caso tenha aceitado. */
     fun maybeAccepted() {
-        if (!hasAddress || mode == Mode.WAZE) return
+        if (!hasAddress || (mode == Mode.WAZE && !rideActive)) return
         tentative = true
         nextIsDropoff = false
         handler.removeCallbacks(hide)
@@ -169,6 +178,9 @@ class FloatingPanel(
         logged = true
         if (PanelPrefs.wazeAfterAccept(context) && hasAddress) {
             handler.removeCallbacks(hide)
+            rideActive = true
+            rideOnBoard = false
+            nextIsDropoff = false
             setMode(Mode.WAZE)
         } else {
             render()
@@ -176,18 +188,34 @@ class FloatingPanel(
     }
 
     /** Corrida aceita em andamento: a janelinha mostra o próximo passo (embarque ou destino). */
-    val inRide: Boolean get() = mode == Mode.WAZE
+    val inRide: Boolean get() = rideActive || mode == Mode.WAZE
 
     /** O passageiro entrou: o botão passa a levar ao destino. */
     fun passengerOnBoard() {
-        if (mode != Mode.WAZE || nextIsDropoff) return
-        nextIsDropoff = true
-        render()
+        if (!rideActive || rideOnBoard) return
+        rideOnBoard = true
+        if (mode == Mode.WAZE && !tentative) {
+            nextIsDropoff = true
+            render()
+        }
     }
 
     /** Viagem terminou: a janelinha some. */
     fun rideEnded() {
-        if (mode == Mode.WAZE) setMode(Mode.NONE)
+        rideActive = false
+        rideOnBoard = false
+        if (mode == Mode.WAZE && !tentative) setMode(Mode.NONE)
+    }
+
+    /** Oferta nova saiu da tela: volta para o botão da corrida em andamento, se houver. */
+    private fun backToRide() {
+        if (rideActive && PanelPrefs.wazeAfterAccept(context)) {
+            nextIsDropoff = rideOnBoard
+            hasAddress = true
+            setMode(Mode.WAZE)
+        } else {
+            setMode(Mode.NONE)
+        }
     }
 
     fun setDriverAppOnScreen(onScreen: Boolean) {
@@ -210,7 +238,7 @@ class FloatingPanel(
         attached = false
     }
 
-    private val hide = Runnable { if (mode == Mode.OFFER && !pinned) setMode(Mode.NONE) }
+    private val hide = Runnable { if (mode == Mode.OFFER && !pinned) backToRide() }
 
     private fun setMode(m: Mode) {
         mode = m

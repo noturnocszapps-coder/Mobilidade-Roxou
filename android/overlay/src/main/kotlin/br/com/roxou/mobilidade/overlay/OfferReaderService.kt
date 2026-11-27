@@ -161,7 +161,8 @@ class OfferReaderService : AccessibilityService() {
             // Só com o app de motorista ocupando a tela (a bolhinha da Uber por cima de outro app não conta).
             val screenH = resources.displayMetrics.heightPixels
             val big = driverRoots.firstOrNull { r -> Rect().also { r.getBoundsInScreen(it) }.height() > screenH / 4 }
-            if (big != null && !shotPending && !(panel?.inRide == true && !offerVisible) && now - lastScan > interval) {
+            // Continua lendo durante a corrida: a 99/Uber mostram ofertas novas por cima da corrida atual.
+            if (big != null && !shotPending && now - lastScan > interval) {
                 lastScan = now
                 shoot(0, big.packageName.toString(), byScan = true)
             }
@@ -230,6 +231,7 @@ class OfferReaderService : AccessibilityService() {
         if (offer == null) {
             if (byScan) {
                 if (offerVisible && offerByScan) endOffer("leitura não achou mais a oferta")
+                else if (panel?.inRide == true) applyRideStage(lines)
             } else {
                 val legs = lines.count { Regex("""\d+\s*min""").containsMatchIn(it.text) && it.text.contains("(") }
                 val money = lines.count { it.text.contains("R$") }
@@ -355,7 +357,13 @@ class OfferReaderService : AccessibilityService() {
         shotPending = true
         screenshotText(null) { lines ->
             shotPending = false
-            if (lines == null) return@screenshotText
+            if (lines != null) applyRideStage(lines)
+        }
+    }
+
+    private fun applyRideStage(lines: List<OcrLine>) {
+        val p = panel ?: return
+        run {
             when {
                 AcceptDetector.looksEnded(lines) -> { p.rideEnded(); RideNotification.hide(this) }
                 AcceptDetector.looksOnTrip(lines) -> p.passengerOnBoard()
@@ -376,8 +384,14 @@ class OfferReaderService : AccessibilityService() {
 
     private fun openWaze(toDropoff: Boolean) {
         val o = lastOffer
-        if (o != null && o.key !in loggedKeys && !offerVisible && SystemClock.uptimeMillis() - lastOfferShownAt < 5 * 60_000) {
+        if (o != null && o.key !in loggedKeys && panel?.isTentative == true) {
             logAccepted(byButton = true) // tocou em Embarque/Destino depois que a oferta saiu: aceitou
+        }
+        // Botão da corrida em andamento: usa os endereços da corrida aceita, não os da última oferta vista.
+        val acc = if (toDropoff) acceptedDropoff else acceptedPickup
+        if (panel?.inRide == true && !offerVisible && acc != null) {
+            go(acc)
+            return
         }
         val fresh = SystemClock.uptimeMillis() - addressesAt < 60 * 60_000
         val remembered = if (!fresh) null else if (toDropoff) dropoffAddress else pickupAddress
