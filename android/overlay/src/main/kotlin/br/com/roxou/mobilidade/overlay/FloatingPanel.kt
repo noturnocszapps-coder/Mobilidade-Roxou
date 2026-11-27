@@ -67,10 +67,14 @@ class FloatingPanel(
         setPadding(dp(8), dp(4), dp(8), dp(4))
         background = GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(red) }
     }
-    private val wazeView = text(14f, Color.BLACK, bold = true).apply {
-        setPadding(dp(12), dp(6), dp(12), dp(6))
+    private fun wazeButton(label: String) = text(13f, Color.BLACK, bold = true).apply {
+        text = label
+        setPadding(dp(10), dp(6), dp(10), dp(6))
         background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(Color.parseColor("#33CCFF")) }
     }
+    /** Etapa 1: deslocamento até o passageiro (ponto A). Etapa 2: do ponto A até o destino (ponto B). */
+    private val pickupButton = wazeButton("① Embarque")
+    private val dropoffButton = wazeButton("② Destino")
     private val hideView = text(18f, Color.parseColor("#888888"), bold = true).apply {
         text = "  ✕"
         setPadding(dp(8), dp(2), dp(2), dp(2))
@@ -78,7 +82,8 @@ class FloatingPanel(
     private val buttons = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        addView(wazeView)
+        addView(pickupButton)
+        addView(dropoffButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
         addView(hideView)
     }
 
@@ -110,12 +115,12 @@ class FloatingPanel(
     private var hasAddress = false
     private var driverAppOnScreen = false
     private var dismissed = false
-    /** Próximo destino do botão: embarque primeiro, depois destino. */
+    /** Qual botão do Waze fica aceso: embarque primeiro, depois destino. */
     private var nextIsDropoff = false
 
     init {
-        wazeView.setOnClickListener { onWaze(nextIsDropoff); nextIsDropoff = !nextIsDropoff; render() }
-        wazeView.setOnLongClickListener { onWaze(!nextIsDropoff); true }
+        pickupButton.setOnClickListener { onWaze(false); nextIsDropoff = true; render() }
+        dropoffButton.setOnClickListener { onWaze(true); nextIsDropoff = false; render() }
         hideView.setOnClickListener { dismissed = true; refreshVisibility() }
         setupDrag()
     }
@@ -214,8 +219,12 @@ class FloatingPanel(
             else -> areaView.visibility = View.GONE
         }
 
-        wazeView.text = if (nextIsDropoff) "Waze ▸ destino" else "Waze ▸ embarque"
-        wazeView.visibility = if (hasAddress) View.VISIBLE else View.GONE
+        // O próximo passo fica aceso; o outro fica apagado (mas continua funcionando).
+        pickupButton.alpha = if (nextIsDropoff) 0.45f else 1f
+        dropoffButton.alpha = if (nextIsDropoff) 1f else 0.45f
+        val wazeVis = if (hasAddress) View.VISIBLE else View.GONE
+        pickupButton.visibility = wazeVis
+        dropoffButton.visibility = wazeVis
 
         // Pílula: só a cor, o valor consolidado e o Waze. O alerta de bairro continua visível.
         verdictView.visibility = if (expanded || e.blocked) View.VISIBLE else View.GONE
