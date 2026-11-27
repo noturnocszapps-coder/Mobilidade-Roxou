@@ -27,12 +27,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -41,6 +44,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -52,16 +56,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
+
+private data class AjudaOpcao(
+    val titulo: String,
+    val mensagem: String,
+)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -86,13 +92,14 @@ fun CompensaScreen(
         mutableDoubleStateOf(inicial.buscaMaximaKm.coerceIn(0.0, 15.0))
     }
     var custoPorKm by remember(inicial) {
-        mutableLongStateOf(inicial.custoPorKmCentavos.coerceIn(10L, 150L))
+        mutableLongStateOf(inicial.custoPorKmCentavos.coerceIn(10L, 300L))
     }
     var bairrosEvitados by remember(inicial) {
         mutableStateOf(inicial.bairrosEvitados)
     }
     var novoBairro by remember { mutableStateOf("") }
     var maisOpcoesAberto by remember { mutableStateOf(false) }
+    var ajudaAberta by remember { mutableStateOf<AjudaOpcao?>(null) }
 
     fun adicionarBairro() {
         val limpo = novoBairro.trim()
@@ -123,19 +130,12 @@ fun CompensaScreen(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = buildAnnotatedString {
-                        withStyle(SpanStyle(color = RoxouColors.Red, fontWeight = FontWeight.SemiBold)) {
-                            append("Mínimo")
-                        }
-                        append(" · ")
-                        withStyle(SpanStyle(color = RoxouColors.Green, fontWeight = FontWeight.SemiBold)) {
-                            append("Bom")
-                        }
-                    },
+                    text = "Toque no (i) para entender cada opção",
                     style = MaterialTheme.typography.bodyMedium,
                     color = RoxouColors.TextSecondary,
                     maxLines = 1,
                     softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
 
@@ -144,14 +144,22 @@ fun CompensaScreen(
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = RoxouSpacing.lg,
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(RoxouSpacing.md)) {
+                Column(verticalArrangement = Arrangement.spacedBy(RoxouSpacing.lg)) {
                     FaixaControle(
                         titulo = "R$ por km",
                         minimoTexto = formatarReaisPreciso(minimoPorKm),
                         bomTexto = formatarReaisPreciso(bomPorKm),
+                        escalaMinTexto = "R$ 0,80",
+                        escalaMaxTexto = "R$ 4,00",
                         value = minimoPorKm.toFloat()..bomPorKm.toFloat(),
                         valueRange = 80f..400f,
                         steps = 63,
+                        onAjuda = {
+                            ajudaAberta = AjudaOpcao(
+                                titulo = "R$ por km",
+                                mensagem = "Quanto a corrida paga por km, somando o caminho até o passageiro e a viagem. Abaixo do mínimo fica vermelho; acima do bom, verde.",
+                            )
+                        },
                         onValueChange = { range ->
                             val novoMin = ((range.start / 5f).roundToInt() * 5L).coerceIn(80L, 400L)
                             val novoBom = ((range.endInclusive / 5f).roundToInt() * 5L).coerceIn(novoMin, 400L)
@@ -166,9 +174,17 @@ fun CompensaScreen(
                         titulo = "R$ por hora",
                         minimoTexto = formatarReaisInteiro(minimoPorHora),
                         bomTexto = formatarReaisInteiro(bomPorHora),
+                        escalaMinTexto = "R$ 10",
+                        escalaMaxTexto = "R$ 100",
                         value = minimoPorHora.toFloat()..bomPorHora.toFloat(),
                         valueRange = 1000f..10000f,
                         steps = 89,
+                        onAjuda = {
+                            ajudaAberta = AjudaOpcao(
+                                titulo = "R$ por hora",
+                                mensagem = "Quanto você ganha por hora, contando o tempo até o passageiro e a viagem.",
+                            )
+                        },
                         onValueChange = { range ->
                             val novoMin = ((range.start / 100f).roundToInt() * 100L).coerceIn(1000L, 10000L)
                             val novoBom = ((range.endInclusive / 100f).roundToInt() * 100L).coerceIn(novoMin, 10000L)
@@ -237,24 +253,40 @@ fun CompensaScreen(
                         SimplesSlider(
                             rotulo = "Busca máxima",
                             valorTexto = formatarBuscaKm(buscaMaximaKm),
+                            escalaMinTexto = "0 km",
+                            escalaMaxTexto = "15 km",
                             value = buscaMaximaKm.toFloat(),
                             valueRange = 0f..15f,
                             steps = 29,
+                            onAjuda = {
+                                ajudaAberta = AjudaOpcao(
+                                    titulo = "Busca máxima",
+                                    mensagem = "Se o passageiro estiver mais longe que isso, a cor da corrida piora um nível. Zero desliga.",
+                                )
+                            },
                             onValueChange = { raw ->
                                 buscaMaximaKm = ((raw * 2f).roundToInt() / 2.0).coerceIn(0.0, 15.0)
                             },
                         )
 
-                        Spacer(modifier = Modifier.height(RoxouSpacing.sm))
+                        Spacer(modifier = Modifier.height(RoxouSpacing.md))
 
                         SimplesSlider(
                             rotulo = "Custo por km",
                             valorTexto = formatarReaisPreciso(custoPorKm),
+                            escalaMinTexto = "R$ 0,10",
+                            escalaMaxTexto = "R$ 3,00",
                             value = custoPorKm.toFloat(),
-                            valueRange = 10f..150f,
-                            steps = 27,
+                            valueRange = 10f..300f,
+                            steps = 57,
+                            onAjuda = {
+                                ajudaAberta = AjudaOpcao(
+                                    titulo = "Custo por km",
+                                    mensagem = "Quanto você gasta por km rodado (combustível e desgaste). Serve para mostrar quanto sobra.",
+                                )
+                            },
                             onValueChange = { raw ->
-                                custoPorKm = ((raw / 5f).roundToInt() * 5L).coerceIn(10L, 150L)
+                                custoPorKm = ((raw / 5f).roundToInt() * 5L).coerceIn(10L, 300L)
                             },
                         )
                     }
@@ -397,6 +429,73 @@ fun CompensaScreen(
             }
         }
     }
+
+    ajudaAberta?.let { ajuda ->
+        AlertDialog(
+            onDismissRequest = { ajudaAberta = null },
+            containerColor = RoxouColors.SurfaceCard,
+            titleContentColor = RoxouColors.TextPrimary,
+            textContentColor = RoxouColors.TextSecondary,
+            title = {
+                Text(
+                    text = ajuda.titulo,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            },
+            text = {
+                Text(
+                    text = ajuda.mensagem,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = RoxouColors.TextSecondary,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { ajudaAberta = null }) {
+                    Text(
+                        text = "Entendi",
+                        color = RoxouColors.PurpleSoft,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun TituloComAjuda(
+    titulo: String,
+    onAjuda: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = titulo,
+            style = MaterialTheme.typography.titleMedium,
+            color = RoxouColors.TextPrimary,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
+        IconButton(
+            onClick = onAjuda,
+            modifier = Modifier.size(36.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Info,
+                contentDescription = "Explicação de $titulo",
+                tint = RoxouColors.TextMuted,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
 }
 
 @Composable
@@ -404,44 +503,46 @@ private fun FaixaControle(
     titulo: String,
     minimoTexto: String,
     bomTexto: String,
+    escalaMinTexto: String,
+    escalaMaxTexto: String,
     value: ClosedFloatingPointRange<Float>,
     valueRange: ClosedFloatingPointRange<Float>,
     steps: Int,
+    onAjuda: () -> Unit,
     onValueChange: (ClosedFloatingPointRange<Float>) -> Unit,
 ) {
+    val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(1f)
+    val fracMin = ((value.start - valueRange.start) / span).coerceIn(0f, 1f)
+    val fracBom = ((value.endInclusive - valueRange.start) / span).coerceIn(fracMin, 1f)
+
     Column(modifier = Modifier.fillMaxWidth()) {
+        TituloComAjuda(
+            titulo = titulo,
+            onAjuda = onAjuda,
+        )
+
+        Spacer(modifier = Modifier.height(RoxouSpacing.xs))
+
+        // Identificação clara das duas pontas: Mínimo (vermelho) à esquerda, Bom (verde) à direita
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
         ) {
-            Text(
-                text = titulo,
-                style = MaterialTheme.typography.titleMedium,
-                color = RoxouColors.TextPrimary,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
+            PontaValorTag(
+                rotulo = "Mínimo",
+                valor = minimoTexto,
+                cor = RoxouColors.Red,
+                modifier = Modifier.weight(1f),
             )
-
-            Text(
-                text = buildAnnotatedString {
-                    withStyle(SpanStyle(color = RoxouColors.Red, fontWeight = FontWeight.Bold)) {
-                        append(minimoTexto)
-                    }
-                    withStyle(SpanStyle(color = RoxouColors.TextMuted)) {
-                        append(" – ")
-                    }
-                    withStyle(SpanStyle(color = RoxouColors.Green, fontWeight = FontWeight.Bold)) {
-                        append(bomTexto)
-                    }
-                },
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
+            PontaValorTag(
+                rotulo = "Bom",
+                valor = bomTexto,
+                cor = RoxouColors.Green,
+                modifier = Modifier.weight(1f),
             )
         }
+
+        Spacer(modifier = Modifier.height(RoxouSpacing.xs))
 
         RangeSlider(
             value = value,
@@ -450,13 +551,121 @@ private fun FaixaControle(
             steps = steps,
             colors = SliderDefaults.colors(
                 thumbColor = RoxouColors.Purple,
-                activeTrackColor = RoxouColors.Purple,
+                activeTrackColor = RoxouColors.Yellow,
                 inactiveTrackColor = RoxouColors.Track,
                 activeTickColor = Color.Transparent,
                 inactiveTickColor = Color.Transparent,
             ),
             modifier = Modifier.fillMaxWidth(),
         )
+
+        // Faixa visual fina mostrando vermelho | amarelo | verde conforme as pontas
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(CircleShape)
+                .background(RoxouColors.Track),
+        ) {
+            if (fracMin > 0.001f) {
+                Box(
+                    modifier = Modifier
+                        .weight(fracMin)
+                        .height(4.dp)
+                        .background(RoxouColors.Red),
+                )
+            }
+            val fracMeio = (fracBom - fracMin).coerceAtLeast(0f)
+            if (fracMeio > 0.001f) {
+                Box(
+                    modifier = Modifier
+                        .weight(fracMeio)
+                        .height(4.dp)
+                        .background(RoxouColors.Yellow),
+                )
+            }
+            val fracFim = (1f - fracBom).coerceAtLeast(0f)
+            if (fracFim > 0.001f) {
+                Box(
+                    modifier = Modifier
+                        .weight(fracFim)
+                        .height(4.dp)
+                        .background(RoxouColors.Green),
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(RoxouSpacing.xs))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = escalaMinTexto,
+                style = MaterialTheme.typography.labelMedium,
+                color = RoxouColors.TextMuted,
+                maxLines = 1,
+                softWrap = false,
+            )
+            Text(
+                text = escalaMaxTexto,
+                style = MaterialTheme.typography.labelMedium,
+                color = RoxouColors.TextMuted,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PontaValorTag(
+    rotulo: String,
+    valor: String,
+    cor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = RoxouColors.Background,
+        border = BorderStroke(1.dp, cor.copy(alpha = 0.4f)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = RoxouSpacing.md, vertical = RoxouSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(cor),
+                )
+                Text(
+                    text = rotulo,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = RoxouColors.TextSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+            Text(
+                text = valor,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = cor,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
     }
 }
 
@@ -464,9 +673,12 @@ private fun FaixaControle(
 private fun SimplesSlider(
     rotulo: String,
     valorTexto: String,
+    escalaMinTexto: String,
+    escalaMaxTexto: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     steps: Int,
+    onAjuda: () -> Unit,
     onValueChange: (Float) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -475,24 +687,21 @@ private fun SimplesSlider(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = rotulo,
-                style = MaterialTheme.typography.bodyMedium,
-                color = RoxouColors.TextSecondary,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
+            TituloComAjuda(
+                titulo = rotulo,
+                onAjuda = onAjuda,
+                modifier = Modifier.weight(1f),
             )
             Text(
                 text = valorTexto,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge,
                 color = RoxouColors.TextPrimary,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
             )
         }
+
         Slider(
             value = value,
             onValueChange = onValueChange,
@@ -507,6 +716,26 @@ private fun SimplesSlider(
             ),
             modifier = Modifier.fillMaxWidth(),
         )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = escalaMinTexto,
+                style = MaterialTheme.typography.labelMedium,
+                color = RoxouColors.TextMuted,
+                maxLines = 1,
+                softWrap = false,
+            )
+            Text(
+                text = escalaMaxTexto,
+                style = MaterialTheme.typography.labelMedium,
+                color = RoxouColors.TextMuted,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
     }
 }
 
@@ -619,11 +848,11 @@ private fun ExemploAoVivoCompacto(
 }
 
 @Preview(
-    name = "Compensa - Leve com RangeSlider",
+    name = "Compensa - Com escala e ajuda",
     showBackground = true,
     backgroundColor = 0xFF121016,
     widthDp = 360,
-    heightDp = 780,
+    heightDp = 860,
 )
 @Composable
 private fun CompensaScreenPreview() {
