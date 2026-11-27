@@ -120,7 +120,7 @@ data class AreaMatch(
 )
 
 object AreaFilter {
-    private val codePattern = Regex("""(?i)\b(?:U?E)?P\s?\d{1,2}\s?[-.]?\s?S\s?[.\-]?\s?\d{1,2}\b""")
+    private val codePattern = Regex("""(?i)\bU?E?P\s?\d{1,2}\s?[-.]?\s?S\s?[.\-]?\s?\d{1,2}\b""")
 
     fun normalize(s: String): String =
         java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)

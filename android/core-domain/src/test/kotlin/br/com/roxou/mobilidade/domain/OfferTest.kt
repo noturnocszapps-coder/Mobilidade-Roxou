@@ -144,6 +144,13 @@ class OfferTest {
         assertTrue(m.blocked)
     }
 
+    @Test fun bloqueio_pelo_codigo_escrito_de_varios_jeitos() {
+        val rules = OfferRules(blockedAreas = listOf("UP5S2"))
+        assertTrue(AreaFilter.match("Rua Tal, 10, Uep5-S.2", rules).blocked)
+        assertTrue(AreaFilter.match("Uep5-S2, Presidente Prudente", rules).blocked)
+        assertFalse(AreaFilter.match("Rua Tal, 10, Uep5-S.3", rules).blocked)
+    }
+
     @Test fun nome_sem_acento_bate() {
         val m = AreaFilter.match("Rua A, 1, Jardim Leonor", OfferRules(blockedAreas = listOf("jardim leonór")))
         assertTrue(m.blocked)
