@@ -26,7 +26,8 @@ object SettingsCodec {
     const val RENTAL_TIERS = "rental_tiers"
     const val RENTAL_TIER_PLATFORMS = "rental_tier_platforms"
     const val GOALS = "goals_by_day"
-    const val GOAL_PLATFORMS = "goal_platforms"
+    // v2 (27/11): a 99 passou a contar na meta diária; o valor antigo (só Uber) é ignorado.
+    const val GOAL_PLATFORMS = "goal_platforms_v2"
     const val CARRY_SHORTFALL = "carry_shortfall"
     const val KM_RESET_DAY = "km_reset_day"
     const val KM_RESET_TIME = "km_reset_time"
