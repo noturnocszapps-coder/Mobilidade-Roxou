@@ -147,6 +147,28 @@ REGRAS QUE NÃO PODEM MUDAR
    - Não mexa no avaliador de ofertas, nas metas, na locação, no OCR nem na janela flutuante além das travas do item 3.
    - Não crie cobrança pelo Google Play Billing (isso fica para quando o app for para a Play Store).
 
+7) PROTEÇÃO DA VERSÃO DE VENDA (obrigatório)
+   a) O "modo de teste / tudo liberado" só pode existir no APK DEBUG. Use BuildConfig.DEBUG:
+      liberado() só devolve true sem licença se BuildConfig.DEBUG == true E a chave pública estiver vazia.
+      No APK RELEASE: sem chave pública configurada, o build tem que FALHAR (no build.gradle.kts, se for
+      tarefa de release e ROXOU_LICENCA_CHAVE_PUBLICA estiver vazia, lance GradleException
+      "Falta a chave pública da licença"). Nunca existe "conta local" em release: sem licença = plano Grátis.
+      Remova do release qualquer texto "Conta local · Teste · tudo liberado".
+   b) Release com R8: isMinifyEnabled = true e isShrinkResources = true, com proguard-android-optimize.txt.
+      Adicione regras keep só do que precisar (Room, ML Kit, serviço de acessibilidade, Compose já funciona).
+   c) Assinatura do APK: o release é assinado com uma chave PRÓPRIA (não a debug.keystore do repositório),
+      lida de GitHub Secrets: ROXOU_KEYSTORE_BASE64, ROXOU_KEYSTORE_SENHA, ROXOU_KEY_ALIAS, ROXOU_KEY_SENHA.
+      Crie um workflow .github/workflows/release-apk.yml (manual, workflow_dispatch) que decodifica o keystore
+      e roda assembleRelease, publicando o APK como artifact "roxou-mobilidade-release".
+   d) Conferência de cópia alterada: em core-data, função assinaturaOriginal(context): Boolean que lê o
+      certificado do próprio APK (PackageManager.GET_SIGNING_CERTIFICATES no Android 9+, GET_SIGNATURES antes),
+      calcula SHA-256 e compara com BuildConfig.CERT_SHA256 (vindo da variável ROXOU_CERT_SHA256).
+      Se não bater (APK reempacotado por outra pessoa), liberado() devolve false para todos os módulos pagos.
+      No debug, essa conferência é ignorada.
+   e) A licença guardada só vale para este aparelho (campo aparelho = ANDROID_ID) e só é aceita se a assinatura
+      ECDSA conferir com a chave pública. Nunca guarde "plano" ou "liberado" em texto solto nas preferências:
+      a única fonte é o token assinado.
+
 Ao terminar, liste os arquivos criados e alterados e confirme que os testes de :core-domain e :core-licenca passam.
 ```
 
@@ -156,4 +178,5 @@ Ao terminar, liste os arquivos criados e alterados e confirme que os testes de :
 2. No GitHub, em Settings > Secrets and variables > Actions > **Variables**, criar:
    - `ROXOU_API_URL` = endereço da API (ex.: `https://mobilidade.seudominio.com.br`)
    - `ROXOU_LICENCA_CHAVE_PUBLICA` = a linha que o `npm run gerar-chaves` mostrou.
-3. Rodar o "Gerar APK" de novo. Sem essas duas variáveis, o APK fica em modo de teste, com tudo liberado.
+3. Rodar o "Gerar APK" de novo. Sem essas duas variáveis, só o APK de teste (debug) libera tudo; o de venda nem é gerado.
+4. Para a versão de venda, criar uma chave de assinatura própria (eu passo o passo a passo quando chegar a hora) e guardar nos Secrets do GitHub: `ROXOU_KEYSTORE_BASE64`, `ROXOU_KEYSTORE_SENHA`, `ROXOU_KEY_ALIAS`, `ROXOU_KEY_SENHA`, e a variável `ROXOU_CERT_SHA256`.
