@@ -17,6 +17,7 @@ import br.com.roxou.mobilidade.data.conta.LicencaStore
 import br.com.roxou.mobilidade.data.conta.RoxouApi
 import br.com.roxou.mobilidade.licenca.Modulo
 import br.com.roxou.mobilidade.domain.model.Platform
+import br.com.roxou.mobilidade.domain.offer.AcceptDetector
 import br.com.roxou.mobilidade.domain.offer.AreaFilter
 import br.com.roxou.mobilidade.domain.offer.OcrLine
 import br.com.roxou.mobilidade.domain.offer.OfferEvaluator
@@ -61,18 +62,25 @@ class OfferReaderService : AccessibilityService() {
     private var pickupAddress: String? = null
     private var dropoffAddress: String? = null
     private var addressesAt = 0L
+    private var lastOffer: br.com.roxou.mobilidade.domain.offer.ParsedOffer? = null
+    private var lastOfferShownAt = 0L
+    private val loggedKeys = mutableSetOf<String>()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         repo = RoxouRepository.get(this)
         licencas = LicencaStore.get(this)
         scope.launch { RoxouApi(licencas).renovarSePreciso() }
-        panel = FloatingPanel(this, ::openWaze)
+        panel = FloatingPanel(this, ::openWaze) { logAccepted(byButton = true) }
         scope.launch { repo.state.collect { state = it } }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val pkg = event?.packageName?.toString() ?: return
+        if (!Radar.isOn(this)) {
+            panel?.setDriverAppOnScreen(false)
+            return
+        }
         // Leitura automática e janela flutuante são do plano Pro.
         if (!licencas.liberado(Modulo.LEITURA)) {
             panel?.setDriverAppOnScreen(false)
@@ -109,6 +117,7 @@ class OfferReaderService : AccessibilityService() {
             if (offerVisible && now - lastOfferSeen > 2_500) {
                 offerVisible = false
                 panel?.offerGone()
+                checkAcceptedSoon()
             }
             return
         }
@@ -150,10 +159,35 @@ class OfferReaderService : AccessibilityService() {
         dropoffAddress = offer.dropoffAddress
         addressesAt = SystemClock.uptimeMillis()
         panel?.showOffer(e)
+        lastOffer = offer
+        lastOfferShownAt = SystemClock.uptimeMillis()
+        if (offer.key in loggedKeys) panel?.markLogged()
 
         listOfNotNull(e.pickupArea.unknownCode, e.dropoffArea.unknownCode).forEach { code ->
             scope.launch { repo.updateSettings { it.copy(offer = AreaFilter.learnCode(it.offer, code)) } }
         }
+    }
+
+    /** O cartão sumiu: olha a tela uma vez para ver se virou "a caminho" (o motorista aceitou). */
+    private fun checkAcceptedSoon() {
+        val offer = lastOffer ?: return
+        if (offer.key in loggedKeys || SystemClock.uptimeMillis() - lastOfferShownAt > 90_000) return
+        handler.postDelayed({
+            screenshotText(null) { lines ->
+                if (lines != null && AcceptDetector.looksAccepted(lines)) logAccepted(byButton = false)
+            }
+        }, 1_500)
+    }
+
+    /** Grava a corrida aceita no histórico como "a confirmar". Só conta na meta depois de confirmada. */
+    private fun logAccepted(byButton: Boolean) {
+        val offer = lastOffer ?: return
+        if (!loggedKeys.add(offer.key)) return
+        if (loggedKeys.size > 200) loggedKeys.clear()
+        val trip = AcceptDetector.toTrip(repo.newId(), offer, repo.now(), byButton)
+        scope.launch { repo.saveTrip(trip) }
+        panel?.markLogged()
+        toast(if (byButton) "Corrida registrada (a confirmar)" else "Aceite detectado: corrida registrada (a confirmar)")
     }
 
     private fun openWaze(toDropoff: Boolean) {

@@ -136,7 +136,7 @@ fun ContaCard(onAbrir: () -> Unit) {
     }
 }
 
-private fun resumo(e: EstadoConta) = when {
+internal fun resumo(e: EstadoConta) = when {
     e.modoTeste -> "Versão de teste: tudo liberado"
     !e.contaDisponivel -> "Conta indisponível nesta versão"
     e.situacao == Situacao.EM_DIA && e.plano != "gratis" -> "${nomePlano(e.plano)} · faltam ${e.diasRestantes} dias"

@@ -182,3 +182,25 @@ class OfferSettingsTest {
         assertEquals(mapOf("P4S2" to ""), r2.areaCodes)
     }
 }
+
+class AcceptDetectorTest {
+    private fun line(t: String) = OcrLine(t, 0, 0, 100, 40)
+
+    @Test fun tela_a_caminho_e_aceite() {
+        assertTrue(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksAccepted(listOf(line("A caminho"), line("Rua Tal, 10"))))
+        assertTrue(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksAccepted(listOf(line("Iniciar Viagem"))))
+    }
+
+    @Test fun voltou_a_procurar_nao_e_aceite() {
+        assertFalse(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksAccepted(listOf(line("Procurando viagens"))))
+        assertFalse(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksAccepted(listOf(line("Você está online"))))
+    }
+
+    @Test fun vira_corrida_a_confirmar() {
+        val o = br.com.roxou.mobilidade.domain.offer.ParsedOffer(Platform.NINETY_NINE, 13_80, 0.363, 4, 8.1, 17)
+        val t = br.com.roxou.mobilidade.domain.offer.AcceptDetector.toTrip("x", o, java.time.Instant.EPOCH, byButton = true)
+        assertEquals(Platform.NINETY_NINE, t.platform)
+        assertFalse(t.confirmed)
+        assertEquals(13_80L, t.amountCents)
+    }
+}
