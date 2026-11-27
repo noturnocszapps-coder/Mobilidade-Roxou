@@ -128,6 +128,9 @@ object OfferParser {
         val t = lines.joinToString(" ") { it.text }
         return when {
             Regex("""(?i)\buber\s?(x|black|comfort|business|flash|moto|bag|exclusivo|adolescente|teens?|planet|juntos)\b|\buberx\b|\bbusiness\s+comfort\b""").containsMatchIn(t) -> Platform.UBER
+            // Jeito de escrever da Uber: "5 minutos (1.6 km)", com ponto. A 99 escreve "17 min (8,1 km)".
+            !Regex("""(?i)taxa99|\b99\s?(pop|comfort)""").containsMatchIn(t) &&
+                Regex("""(?i)\d\s*minutos\s*\(|\(\s*\d+\.\d+\s*km\s*\)""").containsMatchIn(t) -> Platform.UBER
             Regex("""(?i)\b99\s?(pop|top|comfort|moto|entrega)\b|taxa99|\bnegocia\b""").containsMatchIn(t) -> Platform.NINETY_NINE
             else -> null
         }

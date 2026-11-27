@@ -150,4 +150,22 @@ class RadarAuditTest {
         assertEquals(146L, e.perKmCents)
         assertEquals(50_54L, e.perHourCents)
     }
+
+    /** Print do Fernando (27/11): Comfort + Exclusivo, botão "Aceitar", endereço em 3 linhas. */
+    @Test fun uber_comfort_exclusivo_com_botao_aceitar() {
+        val lines = listOf(
+            l("Comfort", 950, left = 165), l("Exclusivo", 950, left = 455), l("R$ 9,08", 1050, left = 96, h = 110),
+            l("4,95 (23)", 1205, left = 190), l("Verificado", 1205, left = 530),
+            l("6 min (2.5 km)", 1360), l("Rua Miguel Verderezzi di Colla,", 1430), l("Jardim Everest, Presidente", 1490),
+            l("Prudente", 1550), l("5 minutos (1.6 km)", 1625), l("Rua Ricardo Anderson Cristófano,", 1695),
+            l("385, Parque Residencial Carandá,", 1755), l("Presidente Prudente", 1815), l("Aceitar", 1990, left = 545),
+        )
+        assertEquals(Platform.UBER, OfferParser.platformHint(lines))
+        val o = OfferParser.parse(lines, Platform.UBER)!!
+        assertEquals(9_08L, o.fareCents)
+        assertEquals(2.5, o.pickupKm, 1e-9)
+        assertEquals(1.6, o.tripKm, 1e-9)
+        assertEquals(11, o.pickupMinutes + o.tripMinutes)
+        assertTrue(o.dropoffAddress!!.startsWith("Rua Ricardo Anderson Cristófano, 385"))
+    }
 }

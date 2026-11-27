@@ -181,6 +181,10 @@ class FloatingPanel(
             rideActive = true
             rideOnBoard = false
             nextIsDropoff = false
+            // Se o app não vir o fim da viagem, o botão da corrida não fica preso para sempre.
+            val minutes = maxOf(45, (evaluation?.totalMinutes ?: 30) * 2 + 15)
+            handler.removeCallbacks(rideTimeout)
+            handler.postDelayed(rideTimeout, minutes * 60_000L)
             setMode(Mode.WAZE)
         } else {
             render()
@@ -199,6 +203,8 @@ class FloatingPanel(
             render()
         }
     }
+
+    private val rideTimeout = Runnable { rideEnded() }
 
     /** Viagem terminou: a janelinha some. */
     fun rideEnded() {
