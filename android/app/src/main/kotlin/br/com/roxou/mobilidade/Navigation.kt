@@ -2,6 +2,7 @@ package br.com.roxou.mobilidade
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
@@ -31,6 +32,7 @@ import br.com.roxou.mobilidade.feature.trips.TripsScreen
 
 private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
     PANEL("painel", "Painel", Icons.Filled.Home),
+    COMPENSA("compensa", "Compensa", Icons.Filled.CheckCircle),
     TRIPS("corridas", "Corridas", Icons.Filled.List),
     GOALS("metas", "Metas", Icons.Filled.Star),
     RENTAL("locacao", "Locação", Icons.Filled.DateRange),
@@ -66,6 +68,7 @@ fun RoxouNavHost(repo: RoxouRepository) {
     ) { padding ->
         NavHost(nav, startDestination = Tab.PANEL.route, modifier = Modifier.padding(padding)) {
             composable(Tab.PANEL.route) { DashboardScreen(repo) }
+            composable(Tab.COMPENSA.route) { CompensaRoute(repo) }
             composable(Tab.TRIPS.route) { TripsScreen(repo) }
             composable(Tab.GOALS.route) { GoalsScreen(repo) }
             composable(Tab.RENTAL.route) { RentalScreen(repo) }

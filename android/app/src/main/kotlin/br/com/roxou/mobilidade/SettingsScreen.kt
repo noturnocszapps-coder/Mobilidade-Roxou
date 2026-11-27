@@ -96,25 +96,8 @@ private fun SettingsForm(initial: AppSettings, onSave: (AppSettings) -> Unit) {
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         ReaderCard()
-        SectionCard("Avaliador de ofertas") {
-            Text("Soma a busca e a viagem. Verde se passar dos dois \"bons\", vermelho se ficar abaixo de um mínimo.", style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NumberField(minKm, { minKm = it }, "R$/km mínimo", Modifier.weight(1f))
-                NumberField(goodKm, { goodKm = it }, "R$/km bom", Modifier.weight(1f))
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NumberField(minHour, { minHour = it }, "R$/hora mínimo", Modifier.weight(1f))
-                NumberField(goodHour, { goodHour = it }, "R$/hora bom", Modifier.weight(1f))
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NumberField(costKm, { costKm = it }, "Custo por km (R$)", Modifier.weight(1f))
-                NumberField(maxPickup, { maxPickup = it }, "Busca máxima (km)", Modifier.weight(1f))
-            }
-            NumberField(tierHelp, { tierHelp = it }, "Faixa da locadora: ajuda se faltar até (corridas)", Modifier.fillMaxWidth(), decimal = false)
-        }
-        SectionCard("Bairros que não quero") {
-            Text("Um por linha. Se o embarque ou o destino cair num deles, a janela fica vermelha com o nome do bairro. O app só avisa: quem decide é você.", style = MaterialTheme.typography.bodySmall)
-            OutlinedTextField(blocked, { blocked = it }, label = { Text("Bairros") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+        SectionCard("O que compensa") {
+            Text("Os limites de R$/km, R$/hora, busca máxima e os bairros que você evita ficam na aba \"Compensa\".", style = MaterialTheme.typography.bodySmall)
         }
         SectionCard("Códigos de região (P5S3...)") {
             Text("Um por linha, no formato P5S3 = Nome do bairro. Código novo que aparecer numa oferta entra aqui sozinho, com o bairro em branco, para você preencher.", style = MaterialTheme.typography.bodySmall)
