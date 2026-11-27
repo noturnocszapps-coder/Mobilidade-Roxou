@@ -51,7 +51,7 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         // APK de testador: igual ao de venda (R8), assinado com a chave de teste e ativado por código.
-        create("testador") {
+        create("avaliacao") {
             initWith(getByName("release"))
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")

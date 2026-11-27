@@ -69,10 +69,10 @@ jobs:
           ROXOU_TESTADOR_HORAS: ${{ vars.ROXOU_TESTADOR_HORAS || '48' }}
         run: |
           export ROXOU_CERT_SHA256=$(keytool -list -v -keystore keystore/debug.keystore -storepass android -alias androiddebugkey | grep 'SHA256:' | head -1 | awk '{print $2}')
-          ./gradlew assembleTestador --no-daemon
+          ./gradlew assembleAvaliacao --no-daemon
           VENCE=$(TZ=America/Sao_Paulo date -d "+${ROXOU_TESTADOR_HORAS} hours" '+%d-%m-%Hh%M')
           NOME="roxou-testador-vence-${VENCE}.apk"
-          cp app/build/outputs/apk/testador/app-testador.apk "$NOME"
+          cp app/build/outputs/apk/avaliacao/app-avaliacao.apk "$NOME"
           echo "nome=$NOME" >> "$GITHUB_OUTPUT"
           echo "### APK de testador: vence em ${VENCE} (horário de Brasília)" >> "$GITHUB_STEP_SUMMARY"
 
