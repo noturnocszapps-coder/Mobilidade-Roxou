@@ -1,0 +1,70 @@
+name: Gerar APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/build-apk.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Preparar o Gradle (com cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Gerar o APK debug
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Dar nome ao APK
+        id: apk
+        run: |
+          NOME="roxou-mobilidade-${GITHUB_RUN_NUMBER}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$NOME"
+          echo "nome=$NOME" >> "$GITHUB_OUTPUT"
+
+      - name: Guardar o APK como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: roxou-mobilidade-apk
+          path: android/${{ steps.apk.outputs.nome }}
+          retention-days: 30
+
+      # Só na main: atualiza a release "ultima-versao", com o APK solto
+      # (sem ZIP), para baixar e instalar direto pelo celular.
+      - name: Publicar na release "ultima-versao"
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOME: ${{ steps.apk.outputs.nome }}
+        run: |
+          gh release delete ultima-versao --yes --cleanup-tag || true
+          gh release create ultima-versao "$NOME" \
+            --title "Última versão (build ${GITHUB_RUN_NUMBER})" \
+            --notes "APK debug gerado automaticamente a partir do commit ${GITHUB_SHA::7}. Toque no arquivo .apk abaixo para baixar." \
+            --target "$GITHUB_SHA" \
+            --latest
