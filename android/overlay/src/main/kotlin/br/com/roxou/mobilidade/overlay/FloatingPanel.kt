@@ -160,7 +160,7 @@ class FloatingPanel(
     val isTentative: Boolean get() = tentative
     private val endTentative = Runnable { if (tentative) { tentative = false; backToRide() } }
 
-    /** A oferta saiu e o app não viu o aceite: mostra Embarque/Destino e ✔ por 15 s, caso tenha aceitado. */
+    /** A oferta saiu e o app não viu o aceite: por 15 s pergunta "Aceitou?". Só o ✔ grava a corrida (e aí vem o Waze). */
     fun maybeAccepted() {
         if (!hasAddress || (mode == Mode.WAZE && !rideActive)) return
         tentative = true
@@ -318,6 +318,9 @@ class FloatingPanel(
         detailView.visibility = if (offerMode) View.VISIBLE else View.GONE
         if (!offerMode) alertView.visibility = View.GONE
         acceptButton.visibility = if (logged || !(offerMode || tentative)) View.GONE else View.VISIBLE
+        // Sem aceite visto, a janela só PERGUNTA (o botão do Waze aparecia e parecia aceite; Fernando, 27/11).
+        acceptButton.text = if (tentative) "Aceitou esta corrida? ✔ Sim" else "✔"
+        acceptButton.textSize = if (tentative) 14f else 12f
         // O próximo passo fica aceso; o outro fica apagado (mas continua funcionando).
         pickupButton.alpha = if (nextIsDropoff) 0.45f else 1f
         dropoffButton.alpha = if (nextIsDropoff) 1f else 0.45f
@@ -330,8 +333,8 @@ class FloatingPanel(
             dropoffButton.textSize = 14f
             pickupButton.alpha = 1f
             dropoffButton.alpha = 1f
-            pickupButton.visibility = if (hasAddress && !nextIsDropoff) View.VISIBLE else View.GONE
-            dropoffButton.visibility = if (hasAddress && nextIsDropoff) View.VISIBLE else View.GONE
+            pickupButton.visibility = if (hasAddress && !nextIsDropoff && !tentative) View.VISIBLE else View.GONE
+            dropoffButton.visibility = if (hasAddress && nextIsDropoff && !tentative) View.VISIBLE else View.GONE
         } else {
             pickupButton.text = "Embarque"
             dropoffButton.text = "Destino"
