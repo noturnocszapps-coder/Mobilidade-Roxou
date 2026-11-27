@@ -51,7 +51,7 @@ class RadarAuditTest {
     }
 
     @Test fun variantes_da_uber_sao_lidas() {
-        listOf("UberX", "Comfort", "Exclusivo", "Uber Adolescente", "Black").forEach { h ->
+        listOf("UberX", "Comfort", "Business Comfort", "Exclusivo", "Uber Adolescente", "Black").forEach { h ->
             val o = OfferParser.parse(uber("13 min (12 km)", "10 minutos (3.6 km)", h), Platform.UBER)
             assertEquals(h, 16_58L, o?.fareCents)
         }
@@ -70,6 +70,7 @@ class RadarAuditTest {
         assertEquals(Platform.UBER, OfferParser.platformHint(listOf(l("UberX", 1), l("Exclusivo", 2))))
         assertEquals(Platform.UBER, OfferParser.platformHint(listOf(l("Uber Adolescente", 1))))
         assertEquals(Platform.NINETY_NINE, OfferParser.platformHint(listOf(l("0% de Taxa99 semanal", 1))))
+        assertEquals(Platform.UBER, OfferParser.platformHint(listOf(l("Business Comfort", 1))))
         assertNull(OfferParser.platformHint(listOf(l("Rua Tal, 10", 1))))
     }
 }

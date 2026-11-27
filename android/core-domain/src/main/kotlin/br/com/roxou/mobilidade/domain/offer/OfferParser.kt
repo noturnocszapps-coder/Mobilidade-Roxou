@@ -125,7 +125,7 @@ object OfferParser {
     fun platformHint(lines: List<OcrLine>): Platform? {
         val t = lines.joinToString(" ") { it.text }
         return when {
-            Regex("""(?i)\buber\s?(x|black|comfort|flash|moto|bag|exclusivo|adolescente|teens?|planet|juntos)\b|\buberx\b""").containsMatchIn(t) -> Platform.UBER
+            Regex("""(?i)\buber\s?(x|black|comfort|business|flash|moto|bag|exclusivo|adolescente|teens?|planet|juntos)\b|\buberx\b|\bbusiness\s+comfort\b""").containsMatchIn(t) -> Platform.UBER
             Regex("""(?i)\b99\s?(pop|top|comfort|moto|entrega)\b|taxa99|\bnegocia\b""").containsMatchIn(t) -> Platform.NINETY_NINE
             else -> null
         }
