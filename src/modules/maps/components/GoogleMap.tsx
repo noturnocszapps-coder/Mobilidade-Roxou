@@ -267,6 +267,20 @@ interface GoogleMapProps {
 }
 
 export const GoogleMap: React.FC<GoogleMapProps> = (props) => {
+  const [apiAuthFailed, setApiAuthFailed] = useState(false);
+
+  useEffect(() => {
+    (window as any).gm_authFailure = () => {
+      console.error("Google Maps API Authentication Failed!");
+      setApiAuthFailed(true);
+    };
+    return () => {
+      try {
+        delete (window as any).gm_authFailure;
+      } catch (e) {}
+    };
+  }, []);
+
   // If API Key is missing, display beautiful splash instructions
   if (!GOOGLE_MAPS_API_KEY) {
     return (
@@ -288,8 +302,28 @@ export const GoogleMap: React.FC<GoogleMapProps> = (props) => {
     );
   }
 
+  if (apiAuthFailed) {
+    return (
+      <div className="relative w-full h-full min-h-[350px] bg-slate-900 rounded-3xl p-6 flex flex-col items-center justify-center text-center border border-rose-500/10 animate-in fade-in duration-300">
+        <div className="bg-rose-950/50 p-4 rounded-full border border-rose-500/20 mb-4">
+          <AlertCircle className="w-8 h-8 text-rose-400 animate-pulse" />
+        </div>
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Falha na Autenticação do Google Maps</h3>
+        <p className="text-xs text-slate-400 max-w-sm mt-2 leading-relaxed">
+          A chave de API <span className="text-purple-400 font-mono font-bold">GOOGLE_MAPS_PLATFORM_KEY</span> foi fornecida, mas o Google recusou a autenticação.
+        </p>
+        <div className="mt-4 bg-slate-950/80 p-4 rounded-2xl text-left border border-rose-500/10 max-w-sm font-mono text-[9px] text-slate-300 space-y-2">
+          <p className="font-bold text-rose-400"># Verificações recomendadas:</p>
+          <p>1. Verifique se a chave está correta (sem espaços ou caracteres cortados).</p>
+          <p>2. Certifique-se de que a <strong className="text-white">Maps JavaScript API</strong> e a <strong className="text-white">Places API</strong> estão ativadas no Console Google Cloud.</p>
+          <p>3. Confirme se o faturamento (billing) está ativo no projeto associado do Cloud.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <APIProvider apiKey={GOOGLE_MAPS_API_KEY} version="weekly" language="pt-BR">
+    <APIProvider apiKey={GOOGLE_MAPS_API_KEY} version="weekly" language="pt-BR" libraries={['places']}>
       <GoogleMapInner {...props} />
     </APIProvider>
   );

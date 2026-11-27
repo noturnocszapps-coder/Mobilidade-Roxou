@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.RoxouMobilidadeLeitura" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/roxou_primary</item>
+    </style>
+</resources>

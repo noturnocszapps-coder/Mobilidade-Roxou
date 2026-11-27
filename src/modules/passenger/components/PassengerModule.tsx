@@ -83,11 +83,11 @@ export const PassengerModule: React.FC<PassengerProps> = ({
 
   // Sync map selections with forms
   useEffect(() => {
-    if (mapOrigin) setOrigin(mapOrigin);
+    setOrigin(mapOrigin);
   }, [mapOrigin]);
 
   useEffect(() => {
-    if (mapDestination) setDestination(mapDestination);
+    setDestination(mapDestination);
   }, [mapDestination]);
 
   const handleOriginChange = (locId: string) => {
