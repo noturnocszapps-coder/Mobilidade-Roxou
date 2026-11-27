@@ -1,6 +1,30 @@
 package br.com.roxou.mobilidade
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import br.com.roxou.mobilidade.design.RoxouColors
+import br.com.roxou.mobilidade.overlay.Radar
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -30,7 +54,40 @@ fun DashboardScreen(repo: RoxouRepository, recursos: Recursos) {
     val vm: DashboardViewModel = viewModel { DashboardViewModel(repo) }
     val state by vm.state.collectAsStateWithLifecycle()
     val s = state?.snapshot ?: return
-    RoxouDesignTheme { PainelScreen(s.toPainelUi(recursos)) }
+    RoxouDesignTheme {
+        Column(Modifier.fillMaxSize().background(RoxouColors.Background)) {
+            if (recursos.janelaFlutuante) RadarToggle()
+            PainelScreen(s.toPainelUi(recursos), Modifier.weight(1f))
+        }
+    }
+}
+
+/** Botão grande do Radar de corridas: liga e desliga a leitura e a janela com um toque. */
+@Composable
+private fun RadarToggle() {
+    val context = LocalContext.current
+    val on by Radar.flow(context).collectAsStateWithLifecycle()
+    val ligado = on ?: true
+    val cor = if (ligado) RoxouColors.Green else RoxouColors.TextMuted
+    Row(
+        Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(RoxouColors.SurfaceCard)
+            .clickable { Radar.set(context, !ligado) }
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(12.dp).clip(CircleShape).background(cor))
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            Text("Radar de corridas", color = RoxouColors.TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(if (ligado) "Ligado: avaliando as ofertas" else "Desligado", color = RoxouColors.TextSecondary, fontSize = 13.sp, maxLines = 1)
+        }
+        Switch(
+            checked = ligado,
+            onCheckedChange = { Radar.set(context, it) },
+            colors = SwitchDefaults.colors(checkedTrackColor = RoxouColors.Green, checkedThumbColor = Color.White),
+        )
+    }
 }
 
 internal fun Snapshot.toPainelUi(recursos: Recursos): PainelUi {

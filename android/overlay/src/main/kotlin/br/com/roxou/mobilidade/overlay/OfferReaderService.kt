@@ -70,6 +70,10 @@ class OfferReaderService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val pkg = event?.packageName?.toString() ?: return
+        if (!Radar.isOn(this)) {
+            panel?.setDriverAppOnScreen(false)
+            return
+        }
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg !in IGNORED && pkg != packageName) {
             panel?.setDriverAppOnScreen(pkg in DRIVER_APPS)
         }
