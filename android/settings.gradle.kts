@@ -18,6 +18,7 @@ rootProject.name = "RoxouMobilidade"
 
 include(":app")
 include(":core-domain")
+include(":core-licenca")
 include(":core-data")
 include(":core-ui")
 include(":feature-trips")

@@ -38,9 +38,13 @@ jobs:
       - name: Rodar os testes (viradas, faixas, locação, caixa)
         run: |
           chmod +x gradlew
-          ./gradlew :core-domain:test testDebugUnitTest --no-daemon
+          ./gradlew :core-domain:test :core-licenca:test testDebugUnitTest --no-daemon
 
       - name: Gerar o APK debug
+        env:
+          # Sem estas variáveis, o APK de teste libera tudo (modo de teste).
+          ROXOU_API_URL: ${{ vars.ROXOU_API_URL }}
+          ROXOU_LICENCA_CHAVE_PUBLICA: ${{ vars.ROXOU_LICENCA_CHAVE_PUBLICA }}
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Dar nome ao APK

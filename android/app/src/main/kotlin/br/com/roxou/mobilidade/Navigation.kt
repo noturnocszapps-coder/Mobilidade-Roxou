@@ -73,7 +73,8 @@ fun RoxouNavHost(repo: RoxouRepository) {
             composable(Tab.GOALS.route) { GoalsScreen(repo) }
             composable(Tab.RENTAL.route) { RentalScreen(repo) }
             composable(Tab.FINANCE.route) { FinanceScreen(repo) }
-            composable(Tab.SETTINGS.route) { SettingsScreen(repo) }
+            composable(Tab.SETTINGS.route) { SettingsScreen(repo, onConta = { nav.navigate("conta") }) }
+            composable("conta") { ContaScreen(onFechar = { nav.popBackStack() }) }
         }
     }
 }

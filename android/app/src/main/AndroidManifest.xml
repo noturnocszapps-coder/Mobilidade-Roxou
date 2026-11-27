@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Etapa 2: sem permissão de internet. Tudo fica no celular até a sincronização (Etapa 5). -->
+<!-- Internet só para a conta e a licença (Etapa 4). O app funciona offline; os dados do motorista ficam no celular. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".RoxouApp"

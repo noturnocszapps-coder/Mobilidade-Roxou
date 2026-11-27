@@ -13,6 +13,9 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import br.com.roxou.mobilidade.data.AppState
 import br.com.roxou.mobilidade.data.RoxouRepository
+import br.com.roxou.mobilidade.data.conta.LicencaStore
+import br.com.roxou.mobilidade.data.conta.RoxouApi
+import br.com.roxou.mobilidade.licenca.Modulo
 import br.com.roxou.mobilidade.domain.model.Platform
 import br.com.roxou.mobilidade.domain.offer.AreaFilter
 import br.com.roxou.mobilidade.domain.offer.OcrLine
@@ -43,6 +46,8 @@ class OfferReaderService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     private lateinit var repo: RoxouRepository
+    private lateinit var licencas: LicencaStore
+    private var avisoProDia = -1L
     private var panel: FloatingPanel? = null
     @Volatile private var state: AppState? = null
 
@@ -60,12 +65,20 @@ class OfferReaderService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         repo = RoxouRepository.get(this)
+        licencas = LicencaStore.get(this)
+        scope.launch { RoxouApi(licencas).renovarSePreciso() }
         panel = FloatingPanel(this, ::openWaze)
         scope.launch { repo.state.collect { state = it } }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val pkg = event?.packageName?.toString() ?: return
+        // Leitura automática e janela flutuante são do plano Pro.
+        if (!licencas.liberado(Modulo.LEITURA)) {
+            panel?.setDriverAppOnScreen(false)
+            if (pkg in DRIVER_APPS) avisarPro()
+            return
+        }
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg !in IGNORED && pkg != packageName) {
             panel?.setDriverAppOnScreen(pkg in DRIVER_APPS)
         }
@@ -126,7 +139,9 @@ class OfferReaderService : AccessibilityService() {
         val offer = OfferParser.parse(lines, platform) ?: return
         triesThisOffer = 99 // já leu esta oferta
         val s = state
-        val rules = s?.settings?.offer ?: br.com.roxou.mobilidade.domain.offer.OfferRules()
+        val todas = s?.settings?.offer ?: br.com.roxou.mobilidade.domain.offer.OfferRules()
+        // Filtro de bairros é do plano Pro.
+        val rules = if (licencas.liberado(Modulo.BAIRROS)) todas else todas.copy(blockedAreas = emptyList())
         val tier = s?.let {
             TierContext(it.settings.ownership == VehicleOwnership.RENTED, it.settings.rental.tierPlatforms, it.snapshot.tiers)
         }
@@ -158,6 +173,14 @@ class OfferReaderService : AccessibilityService() {
 
     private fun go(address: String) {
         if (!Waze.navigate(this, address)) toast("Waze não instalado")
+    }
+
+    /** Uma vez por dia, para não incomodar. */
+    private fun avisarPro() {
+        val dia = System.currentTimeMillis() / 86_400_000
+        if (dia == avisoProDia) return
+        avisoProDia = dia
+        Toast.makeText(this, "A leitura automática é do plano Pro. Abra o Roxou > Ajustes para testar grátis.", Toast.LENGTH_LONG).show()
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
