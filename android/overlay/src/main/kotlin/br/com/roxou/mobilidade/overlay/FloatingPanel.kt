@@ -30,6 +30,7 @@ import kotlin.math.abs
 class FloatingPanel(
     private val context: Context,
     private val onWaze: (toDropoff: Boolean) -> Unit,
+    private val onAccepted: () -> Unit,
 ) {
     private val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val prefs = context.getSharedPreferences("roxou_overlay", Context.MODE_PRIVATE)
@@ -75,6 +76,13 @@ class FloatingPanel(
     /** Etapa 1: deslocamento até o passageiro (ponto A). Etapa 2: do ponto A até o destino (ponto B). */
     private val pickupButton = wazeButton("① Embarque")
     private val dropoffButton = wazeButton("② Destino")
+    /** Um toque grava a corrida no histórico ("a confirmar"). Não aceita nada na Uber/99. */
+    private val acceptButton = text(13f, Color.BLACK, bold = true).apply {
+        text = "✔ Aceitei"
+        setPadding(dp(10), dp(6), dp(10), dp(6))
+        background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(green) }
+    }
+    private var logged = false
     private val hideView = text(18f, Color.parseColor("#888888"), bold = true).apply {
         text = "  ✕"
         setPadding(dp(8), dp(2), dp(2), dp(2))
@@ -93,6 +101,7 @@ class FloatingPanel(
         background = panelBg
         alpha = 0.95f
         listOf(verdictView, mainView, detailView, moneyView, reasonView, areaView).forEach { addView(it) }
+        addView(acceptButton, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(6) })
         addView(buttons, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(6) })
     }
 
@@ -119,6 +128,7 @@ class FloatingPanel(
     private var nextIsDropoff = false
 
     init {
+        acceptButton.setOnClickListener { onAccepted() }
         pickupButton.setOnClickListener { onWaze(false); nextIsDropoff = true; render() }
         dropoffButton.setOnClickListener { onWaze(true); nextIsDropoff = false; render() }
         hideView.setOnClickListener { dismissed = true; refreshVisibility() }
@@ -131,6 +141,7 @@ class FloatingPanel(
         hasAddress = e.offer.pickupAddress != null || e.offer.dropoffAddress != null
         if (isNew) {
             nextIsDropoff = false
+            logged = false
             dismissed = false
             expanded = true
             handler.removeCallbacks(collapse)
@@ -145,6 +156,12 @@ class FloatingPanel(
         if (!expanded) return
         handler.removeCallbacks(collapse)
         handler.postDelayed(collapse, 1_500)
+    }
+
+    /** A corrida desta oferta já foi para o histórico: some o botão "Aceitei". */
+    fun markLogged() {
+        logged = true
+        render()
     }
 
     fun setDriverAppOnScreen(onScreen: Boolean) {
@@ -219,6 +236,7 @@ class FloatingPanel(
             else -> areaView.visibility = View.GONE
         }
 
+        acceptButton.visibility = if (logged) View.GONE else View.VISIBLE
         // O próximo passo fica aceso; o outro fica apagado (mas continua funcionando).
         pickupButton.alpha = if (nextIsDropoff) 0.45f else 1f
         dropoffButton.alpha = if (nextIsDropoff) 1f else 0.45f
