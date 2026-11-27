@@ -1,5 +1,8 @@
 package br.com.roxou.mobilidade
 
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,12 +17,17 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -73,9 +81,48 @@ private fun SettingsForm(initial: AppSettings, onSave: (AppSettings) -> Unit) {
     var kmReset by remember(initial) { mutableStateOf(initial.turnover.kmResetTime.toString()) }
     var rideReset by remember(initial) { mutableStateOf(initial.turnover.rideWeekResetTime.toString()) }
     var workdayEnd by remember(initial) { mutableStateOf(initial.turnover.workdayEndTime.toString()) }
+    val o = initial.offer
+    var minKm by remember(initial) { mutableStateOf(centsText(o.minPerKmCents)) }
+    var goodKm by remember(initial) { mutableStateOf(centsText(o.goodPerKmCents)) }
+    var minHour by remember(initial) { mutableStateOf(centsText(o.minPerHourCents)) }
+    var goodHour by remember(initial) { mutableStateOf(centsText(o.goodPerHourCents)) }
+    var costKm by remember(initial) { mutableStateOf(centsText(o.costPerKmCents)) }
+    var maxPickup by remember(initial) { mutableStateOf(o.maxPickupKm.toString().replace('.', ',')) }
+    var tierHelp by remember(initial) { mutableStateOf(o.tierHelpRides.toString()) }
+    var blocked by remember(initial) { mutableStateOf(o.blockedAreas.joinToString("\n")) }
+    var codes by remember(initial) { mutableStateOf(o.areaCodes.entries.joinToString("\n") { "${it.key} = ${it.value}" }) }
     var message by remember { mutableStateOf<String?>(null) }
+    val pendingCodes = o.areaCodes.filterValues { it.isBlank() }.keys
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        ReaderCard()
+        SectionCard("Avaliador de ofertas") {
+            Text("Soma a busca e a viagem. Verde se passar dos dois \"bons\", vermelho se ficar abaixo de um mínimo.", style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NumberField(minKm, { minKm = it }, "R$/km mínimo", Modifier.weight(1f))
+                NumberField(goodKm, { goodKm = it }, "R$/km bom", Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NumberField(minHour, { minHour = it }, "R$/hora mínimo", Modifier.weight(1f))
+                NumberField(goodHour, { goodHour = it }, "R$/hora bom", Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NumberField(costKm, { costKm = it }, "Custo por km (R$)", Modifier.weight(1f))
+                NumberField(maxPickup, { maxPickup = it }, "Busca máxima (km)", Modifier.weight(1f))
+            }
+            NumberField(tierHelp, { tierHelp = it }, "Faixa da locadora: ajuda se faltar até (corridas)", Modifier.fillMaxWidth(), decimal = false)
+        }
+        SectionCard("Bairros que não quero") {
+            Text("Um por linha. Se o embarque ou o destino cair num deles, a janela fica vermelha com o nome do bairro. O app só avisa: quem decide é você.", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(blocked, { blocked = it }, label = { Text("Bairros") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+        }
+        SectionCard("Códigos de região (P5S3...)") {
+            Text("Um por linha, no formato P5S3 = Nome do bairro. Código novo que aparecer numa oferta entra aqui sozinho, com o bairro em branco, para você preencher.", style = MaterialTheme.typography.bodySmall)
+            if (pendingCodes.isNotEmpty()) {
+                Text("Para traduzir: ${pendingCodes.joinToString(", ")}", color = MaterialTheme.colorScheme.error)
+            }
+            OutlinedTextField(codes, { codes = it }, label = { Text("Códigos") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+        }
         SectionCard("Veículo") {
             ChoiceChips(VehicleOwnership.entries, ownership, { if (it == VehicleOwnership.RENTED) "Alugado" else "Próprio" }) { ownership = it }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -120,7 +167,22 @@ private fun SettingsForm(initial: AppSettings, onSave: (AppSettings) -> Unit) {
                 val result = buildSettings(
                     initial, ownership, company, installment, kmAllowance, extraKm, tiers,
                     goals.mapValues { it.value.value }, carry, kmReset, rideReset, workdayEnd,
-                )
+                ).mapCatching { base ->
+                    fun money(t: String, what: String) = ManualTripEntry.parseMoneyToCents(t.ifBlank { "0" })?.takeIf { it >= 0 } ?: error("$what inválido.")
+                    base.copy(
+                        offer = base.offer.copy(
+                            minPerKmCents = money(minKm, "R$/km mínimo"),
+                            goodPerKmCents = money(goodKm, "R$/km bom"),
+                            minPerHourCents = money(minHour, "R$/hora mínimo"),
+                            goodPerHourCents = money(goodHour, "R$/hora bom"),
+                            costPerKmCents = money(costKm, "Custo por km"),
+                            maxPickupKm = maxPickup.trim().replace(',', '.').ifEmpty { "0" }.toDoubleOrNull()?.takeIf { it >= 0 } ?: error("Busca máxima inválida."),
+                            tierHelpRides = tierHelp.trim().ifEmpty { "0" }.toIntOrNull()?.takeIf { it >= 0 } ?: error("Faixa da locadora inválida."),
+                            blockedAreas = SettingsCodec.decodeList(blocked),
+                            areaCodes = SettingsCodec.decodeCodes(codes),
+                        ),
+                    )
+                }
                 message = result.fold(
                     onSuccess = { onSave(it); "Configurações salvas." },
                     onFailure = { it.message ?: "Valor inválido." },
@@ -128,6 +190,39 @@ private fun SettingsForm(initial: AppSettings, onSave: (AppSettings) -> Unit) {
             }, modifier = Modifier.fillMaxWidth()) { Text("Salvar configurações") }
         }
     }
+}
+
+/** Liga a leitura das ofertas (serviço de acessibilidade) e explica o passo das configurações restritas. */
+@Composable
+private fun ReaderCard() {
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(isReaderOn(context)) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) on = isReaderOn(context) }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
+    }
+    SectionCard("Janela flutuante") {
+        Text(
+            if (on) "Leitura das ofertas LIGADA. A janela aparece sozinha quando chega oferta na Uber ou na 99."
+            else "Leitura das ofertas DESLIGADA.",
+            color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+        )
+        Text(
+            "Para ligar: toque no botão, entre em \"Apps instalados\" (ou \"Serviços instalados\"), escolha \"Roxou Mobilidade – leitura de ofertas\" e ative. " +
+                "Se o Android bloquear (\"configuração restrita\"), vá em Configurações > Apps > Roxou Mobilidade, toque no menu ⋮ e em \"Permitir configurações restritas\". Depois tente de novo.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Button(onClick = {
+            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }, modifier = Modifier.fillMaxWidth()) { Text(if (on) "Abrir acessibilidade" else "Ligar leitura das ofertas") }
+    }
+}
+
+private fun isReaderOn(context: Context): Boolean {
+    val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+    return enabled.split(':').any { it.contains(context.packageName) && it.contains("OfferReaderService") }
 }
 
 private fun applyPreset(p: RentalPlan, set: (String, String, String, String, String) -> Unit) = set(

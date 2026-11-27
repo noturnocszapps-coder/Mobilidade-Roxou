@@ -102,5 +102,11 @@ class RoxouRepository(
     companion object {
         fun create(context: Context): RoxouRepository =
             RoxouRepository(RoxouDatabase.create(context), SettingsStore(context))
+
+        @Volatile private var instance: RoxouRepository? = null
+
+        /** Instância única, dividida entre as telas e o serviço da janela flutuante. */
+        fun get(context: Context): RoxouRepository =
+            instance ?: synchronized(this) { instance ?: create(context.applicationContext).also { instance = it } }
     }
 }

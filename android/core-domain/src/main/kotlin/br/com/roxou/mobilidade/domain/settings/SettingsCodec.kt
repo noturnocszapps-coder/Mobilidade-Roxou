@@ -4,6 +4,7 @@ import br.com.roxou.mobilidade.domain.goals.DailyGoalPlan
 import br.com.roxou.mobilidade.domain.goals.DiscountTier
 import br.com.roxou.mobilidade.domain.goals.TierTable
 import br.com.roxou.mobilidade.domain.model.Platform
+import br.com.roxou.mobilidade.domain.offer.OfferRules
 import br.com.roxou.mobilidade.domain.rental.RentalPlan
 import br.com.roxou.mobilidade.domain.rental.VehicleOwnership
 import br.com.roxou.mobilidade.domain.summary.AppSettings
@@ -32,6 +33,15 @@ object SettingsCodec {
     const val RIDE_RESET_DAY = "ride_reset_day"
     const val RIDE_RESET_TIME = "ride_reset_time"
     const val WORKDAY_END = "workday_end_time"
+    const val OFFER_MIN_KM = "offer_min_per_km_cents"
+    const val OFFER_GOOD_KM = "offer_good_per_km_cents"
+    const val OFFER_MIN_HOUR = "offer_min_per_hour_cents"
+    const val OFFER_GOOD_HOUR = "offer_good_per_hour_cents"
+    const val OFFER_COST_KM = "offer_cost_per_km_cents"
+    const val OFFER_MAX_PICKUP = "offer_max_pickup_km"
+    const val OFFER_TIER_HELP = "offer_tier_help_rides"
+    const val OFFER_BLOCKED = "offer_blocked_areas"
+    const val OFFER_CODES = "offer_area_codes"
 
     fun encode(s: AppSettings): Map<String, String> = mapOf(
         OWNERSHIP to s.ownership.name,
@@ -50,6 +60,15 @@ object SettingsCodec {
         RIDE_RESET_DAY to s.turnover.rideWeekResetDay.name,
         RIDE_RESET_TIME to s.turnover.rideWeekResetTime.toString(),
         WORKDAY_END to s.turnover.workdayEndTime.toString(),
+        OFFER_MIN_KM to s.offer.minPerKmCents.toString(),
+        OFFER_GOOD_KM to s.offer.goodPerKmCents.toString(),
+        OFFER_MIN_HOUR to s.offer.minPerHourCents.toString(),
+        OFFER_GOOD_HOUR to s.offer.goodPerHourCents.toString(),
+        OFFER_COST_KM to s.offer.costPerKmCents.toString(),
+        OFFER_MAX_PICKUP to s.offer.maxPickupKm.toString(),
+        OFFER_TIER_HELP to s.offer.tierHelpRides.toString(),
+        OFFER_BLOCKED to s.offer.blockedAreas.joinToString(";"),
+        OFFER_CODES to encodeCodes(s.offer.areaCodes),
     )
 
     fun decode(m: Map<String, String>): AppSettings {
@@ -77,8 +96,31 @@ object SettingsCodec {
             carryShortfall = m[CARRY_SHORTFALL]?.toBooleanStrictOrNull() ?: d.carryShortfall,
             ownership = m[OWNERSHIP]?.let { runCatching { VehicleOwnership.valueOf(it) }.getOrNull() } ?: d.ownership,
             rental = rental,
+            offer = OfferRules(
+                minPerKmCents = m[OFFER_MIN_KM].cents() ?: d.offer.minPerKmCents,
+                goodPerKmCents = m[OFFER_GOOD_KM].cents() ?: d.offer.goodPerKmCents,
+                minPerHourCents = m[OFFER_MIN_HOUR].cents() ?: d.offer.minPerHourCents,
+                goodPerHourCents = m[OFFER_GOOD_HOUR].cents() ?: d.offer.goodPerHourCents,
+                costPerKmCents = m[OFFER_COST_KM].cents() ?: d.offer.costPerKmCents,
+                maxPickupKm = m[OFFER_MAX_PICKUP]?.toDoubleOrNull()?.takeIf { it >= 0 } ?: d.offer.maxPickupKm,
+                tierHelpRides = m[OFFER_TIER_HELP]?.toIntOrNull()?.takeIf { it >= 0 } ?: d.offer.tierHelpRides,
+                blockedAreas = m[OFFER_BLOCKED]?.let(::decodeList) ?: d.offer.blockedAreas,
+                areaCodes = m[OFFER_CODES]?.let(::decodeCodes) ?: d.offer.areaCodes,
+            ),
         )
     }
+
+    /** "P5S3=Parque dos Pinheiros;P4S2=" (bairro vazio = falta traduzir). */
+    fun encodeCodes(c: Map<String, String>): String = c.entries.joinToString(";") { "${it.key.trim()}=${it.value.trim()}" }
+
+    fun decodeCodes(raw: String): Map<String, String> = raw.split(';', '\n').mapNotNull { part ->
+        val i = part.indexOf('=')
+        if (i <= 0) null else part.substring(0, i).trim().takeIf { it.isNotEmpty() }?.let { it to part.substring(i + 1).trim() }
+    }.toMap(LinkedHashMap())
+
+    fun decodeList(raw: String): List<String> = raw.split(';', ',', '\n').map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+
+    private fun String?.cents(): Long? = this?.toLongOrNull()?.takeIf { it >= 0 }
 
     /** "40:8000,60:16000,80:25000" (corridas:centavos). */
     fun encodeTiers(t: TierTable): String = t.sorted.joinToString(",") { "${it.minRides}:${it.discountCents}" }

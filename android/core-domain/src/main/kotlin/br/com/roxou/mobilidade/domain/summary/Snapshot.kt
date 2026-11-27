@@ -38,6 +38,7 @@ data class AppSettings(
     val carryShortfall: Boolean = false,
     val ownership: VehicleOwnership = VehicleOwnership.RENTED,
     val rental: RentalPlan = RentalPlan.LOCALIZA_ZARP,
+    val offer: br.com.roxou.mobilidade.domain.offer.OfferRules = br.com.roxou.mobilidade.domain.offer.OfferRules(),
 )
 
 data class Records(

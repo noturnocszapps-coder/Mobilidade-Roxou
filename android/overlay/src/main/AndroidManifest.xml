@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <package android:name="com.waze" />
+    </queries>
+    <application>
+        <!-- Lê o cartão de oferta da Uber e da 99 e mostra a janela flutuante.
+             Só lê: nunca clica, nunca aceita nem recusa corrida. -->
+        <service
+            android:name=".OfferReaderService"
+            android:exported="false"
+            android:label="@string/reader_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/roxou_reader_config" />
+        </service>
+    </application>
+</manifest>

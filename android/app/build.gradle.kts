@@ -17,7 +17,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = buildNumber
-        versionName = "0.2.$buildNumber"
+        versionName = "0.3.$buildNumber"
     }
 
     signingConfigs {
@@ -56,6 +56,7 @@ dependencies {
     implementation(project(":feature-goals"))
     implementation(project(":feature-rental"))
     implementation(project(":feature-finance"))
+    implementation(project(":overlay"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
