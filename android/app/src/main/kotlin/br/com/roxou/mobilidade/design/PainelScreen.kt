@@ -3,6 +3,7 @@ package br.com.roxou.mobilidade.design
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.sp
 fun PainelScreen(
     ui: PainelUi,
     modifier: Modifier = Modifier,
+    onAbrirFinancas: () -> Unit = {},
 ) {
     val mostrarParcela = ui.recursos.locacao && ui.parcelaFaltaCentavos != null
     val mostrarLivre = ui.recursos.financas
@@ -79,6 +81,7 @@ fun PainelScreen(
                     parcelaFaltaCentavos = ui.parcelaFaltaCentavos,
                     mostrarLivre = mostrarLivre,
                     dinheiroLivreCentavos = ui.dinheiroLivreCentavos,
+                    onAbrirFinancas = onAbrirFinancas,
                 )
             }
         }
@@ -342,6 +345,7 @@ private fun FinanceiroBloco(
     parcelaFaltaCentavos: Long?,
     mostrarLivre: Boolean,
     dinheiroLivreCentavos: Long,
+    onAbrirFinancas: () -> Unit,
 ) {
     if (mostrarParcela && mostrarLivre) {
         val falta = parcelaFaltaCentavos ?: 0L
@@ -355,6 +359,7 @@ private fun FinanceiroBloco(
                 valor = if (paga) "Paga" else formatarReais(falta),
                 corValor = if (paga) RoxouColors.Green else RoxouColors.Red,
                 larguraTotal = false,
+                onClick = onAbrirFinancas,
                 modifier = Modifier.weight(1f),
             )
             ValorCard(
@@ -362,6 +367,7 @@ private fun FinanceiroBloco(
                 valor = formatarReais(dinheiroLivreCentavos),
                 corValor = if (dinheiroLivreCentavos < 0L) RoxouColors.Red else RoxouColors.TextPrimary,
                 larguraTotal = false,
+                onClick = onAbrirFinancas,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -373,6 +379,7 @@ private fun FinanceiroBloco(
             valor = if (paga) "Paga" else formatarReais(falta),
             corValor = if (paga) RoxouColors.Green else RoxouColors.Red,
             larguraTotal = true,
+            onClick = onAbrirFinancas,
             modifier = Modifier.fillMaxWidth(),
         )
     } else if (mostrarLivre) {
@@ -381,6 +388,7 @@ private fun FinanceiroBloco(
             valor = formatarReais(dinheiroLivreCentavos),
             corValor = if (dinheiroLivreCentavos < 0L) RoxouColors.Red else RoxouColors.TextPrimary,
             larguraTotal = true,
+            onClick = onAbrirFinancas,
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -392,10 +400,13 @@ private fun ValorCard(
     valor: String,
     corValor: Color,
     larguraTotal: Boolean,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     RoxouCard(
-        modifier = modifier,
+        modifier = modifier
+            .clip(MaterialTheme.shapes.large)
+            .clickable(onClick = onClick),
         contentPadding = RoxouSpacing.lg,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {

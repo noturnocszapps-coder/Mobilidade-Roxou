@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.roxou.mobilidade.data.RoxouRepository
+import br.com.roxou.mobilidade.design.JanelaAjustesSheet
 import br.com.roxou.mobilidade.design.RoxouColors
 import br.com.roxou.mobilidade.domain.model.Platform
 import br.com.roxou.mobilidade.domain.offer.OfferStats
@@ -77,8 +78,7 @@ private fun Opcao(texto: String, marcado: Boolean, onClick: () -> Unit) {
     )
 }
 
-/** Ajustes da janela flutuante: posição, tempo na tela, nota mínima e Waze depois do aceite. */
-@OptIn(ExperimentalLayoutApi::class)
+/** Ajustes da janela flutuante (visual do AI Studio: design/JanelaAjustes.kt). */
 @Composable
 fun JanelaAjustesDialog(repo: RoxouRepository, notaMinima: Double, onFechar: () -> Unit) {
     val context = LocalContext.current
@@ -91,118 +91,28 @@ fun JanelaAjustesDialog(repo: RoxouRepository, notaMinima: Double, onFechar: () 
     var notificacao by remember { mutableStateOf(PanelPrefs.rideNotification(context)) }
     val pedirNotificacao = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    AlertDialog(
-        onDismissRequest = onFechar,
-        containerColor = RoxouColors.SurfaceCard,
-        confirmButton = { TextButton(onClick = onFechar) { Text("Pronto", color = RoxouColors.PurpleSoft) } },
-        title = { Text("Janela das corridas", color = RoxouColors.TextPrimary) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                Titulo("Onde fica na tela")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PanelPrefs.Position.entries.forEach { p ->
-                        Opcao(p.label, posicao == p) { posicao = p; PanelPrefs.setPosition(context, p) }
-                    }
-                }
-                Ajuda("Para subir ou descer, arraste a janela.")
-
-                Titulo("Quanto tempo fica na tela")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PanelPrefs.SECONDS_OPTIONS.forEach { s ->
-                        Opcao("$s s", segundos == s) { segundos = s; PanelPrefs.setSeconds(context, s) }
-                    }
-                }
-                Ajuda("Depois some sozinha. Um toque na janela segura ela até a oferta sumir.")
-
-                Titulo("Nota mínima do passageiro")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(0.0, 4.70, 4.80, 4.85, 4.90).forEach { v ->
-                        val label = if (v == 0.0) "Não avisar" else String.format(pt, "%.2f", v)
-                        Opcao(label, nota == v) {
-                            nota = v
-                            scope.launch { repo.updateSettings { it.copy(offer = it.offer.copy(minPassengerRating = v)) } }
-                        }
-                    }
-                }
-                Ajuda("Abaixo dessa nota a janela avisa e a cor piora um nível.")
-
-                Titulo("Mapa para Embarque e Destino")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Waze.MapApp.entries.forEach { m ->
-                        Opcao(m.label, mapa == m) { mapa = m; PanelPrefs.setMapApp(context, m) }
-                    }
-                }
-
-                Titulo("Notificação da corrida")
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Ajuda("Depois do aceite, deixa Embarque e Destino na barra de notificações, para abrir o mapa a qualquer hora", Modifier.weight(1f))
-                    Switch(
-                        checked = notificacao,
-                        onCheckedChange = {
-                            notificacao = it
-                            PanelPrefs.setRideNotification(context, it)
-                            if (it && Build.VERSION.SDK_INT >= 33) pedirNotificacao.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        },
-                        colors = SwitchDefaults.colors(checkedTrackColor = RoxouColors.Green, checkedThumbColor = Color.White),
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-
-                Titulo("Botões na tela depois do aceite")
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Ajuda("Deixa uma janelinha com Embarque e Destino em cima do app da Uber/99", Modifier.weight(1f))
-                    Switch(
-                        checked = waze,
-                        onCheckedChange = { waze = it; PanelPrefs.setWazeAfterAccept(context, it) },
-                        colors = SwitchDefaults.colors(checkedTrackColor = RoxouColors.Green, checkedThumbColor = Color.White),
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-            }
+    JanelaAjustesSheet(
+        posicao = posicao.ordinal,
+        segundos = segundos,
+        notaMinima = nota,
+        wazeDepoisDoAceite = waze,
+        onPosicao = { i -> PanelPrefs.Position.entries.getOrNull(i)?.let { posicao = it; PanelPrefs.setPosition(context, it) } },
+        onSegundos = { segundos = it; PanelPrefs.setSeconds(context, it) },
+        onNotaMinima = { v ->
+            nota = v
+            scope.launch { repo.updateSettings { it.copy(offer = it.offer.copy(minPassengerRating = v)) } }
+        },
+        onWaze = { waze = it; PanelPrefs.setWazeAfterAccept(context, it) },
+        onFechar = onFechar,
+        mapa = mapa.ordinal,
+        onMapa = { i -> Waze.MapApp.entries.getOrNull(i)?.let { mapa = it; PanelPrefs.setMapApp(context, it) } },
+        notificacao = notificacao,
+        onNotificacao = {
+            notificacao = it
+            PanelPrefs.setRideNotification(context, it)
+            if (it && Build.VERSION.SDK_INT >= 33) pedirNotificacao.launch(Manifest.permission.POST_NOTIFICATIONS)
         },
     )
-}
-
-/** Resumo das ofertas que apareceram (aceitas e recusadas). */
-@Composable
-fun ResumoOfertasDialog(s: OfferStats, onFechar: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onFechar,
-        containerColor = RoxouColors.SurfaceCard,
-        confirmButton = { TextButton(onClick = onFechar) { Text("Fechar", color = RoxouColors.PurpleSoft) } },
-        title = { Text("Ofertas que tocaram", color = RoxouColors.TextPrimary) },
-        text = {
-            Column {
-                fun pct(v: Double) = String.format(pt, "%.0f%%", v * 100)
-                Linha("Hoje", "${s.todayTotal} ofertas · ${s.todayAccepted} aceitas")
-                Linha("Média por dia", String.format(pt, "%.1f ofertas", s.perDay))
-                Linha("Você aceita", pct(s.acceptRate))
-                s.bestWeekday?.let { Linha("Dia que mais toca", diaNome(it)) }
-                s.busiestHour?.let { Linha("Horário que mais toca", "${it}h às ${it + 1}h") }
-                Linha("Uber · 99", "${s.byPlatform[Platform.UBER] ?: 0} · ${s.byPlatform[Platform.NINETY_NINE] ?: 0}")
-                Spacer(Modifier.height(8.dp))
-                Ajuda("Conta desde que o Radar começou a guardar as ofertas (${s.days} dia${if (s.days == 1) "" else "s"}).")
-            }
-        },
-    )
-}
-
-@Composable
-private fun Linha(rotulo: String, valor: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(rotulo, color = RoxouColors.TextSecondary, fontSize = 14.sp, modifier = Modifier.weight(1f))
-        Text(valor, color = RoxouColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-private fun diaNome(d: DayOfWeek) = when (d) {
-    DayOfWeek.MONDAY -> "Segunda"
-    DayOfWeek.TUESDAY -> "Terça"
-    DayOfWeek.WEDNESDAY -> "Quarta"
-    DayOfWeek.THURSDAY -> "Quinta"
-    DayOfWeek.FRIDAY -> "Sexta"
-    DayOfWeek.SATURDAY -> "Sábado"
-    DayOfWeek.SUNDAY -> "Domingo"
 }
 
 /** O celular não está limitando o Roxou na economia de bateria? */

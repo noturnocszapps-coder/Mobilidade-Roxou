@@ -45,6 +45,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.activity.compose.BackHandler
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -73,11 +74,25 @@ class DashboardViewModel(repo: RoxouRepository) : ViewModel() {
 fun DashboardScreen(repo: RoxouRepository, recursos: Recursos) {
     val vm: DashboardViewModel = viewModel { DashboardViewModel(repo) }
     val state by vm.state.collectAsStateWithLifecycle()
-    val s = state?.snapshot ?: return
+    val st = state ?: return
+    val s = st.snapshot
+    var tela by remember { mutableStateOf<String?>(null) }
+    var resumo by remember { mutableStateOf<OfferStats?>(null) }
+    BackHandler(enabled = tela != null) { tela = null }
     RoxouDesignTheme {
-        Column(Modifier.fillMaxSize().background(RoxouColors.Background)) {
-            if (recursos.janelaFlutuante) RadarToggle(repo, state?.settings?.offer?.minPassengerRating ?: 4.85)
-            PainelScreen(s.toPainelUi(recursos), Modifier.weight(1f))
+        when (tela) {
+            "financas" -> FinancasRoute(repo, st) { tela = null }
+            "ofertas" -> resumo?.let { OfertasResumoRoute(it) { tela = null } } ?: run { tela = null }
+            else -> Column(Modifier.fillMaxSize().background(RoxouColors.Background)) {
+                if (recursos.janelaFlutuante) {
+                    RadarToggle(repo, st.settings.offer.minPassengerRating) { stats -> resumo = stats; tela = "ofertas" }
+                }
+                PainelScreen(
+                    s.toPainelUi(recursos),
+                    Modifier.weight(1f),
+                    onAbrirFinancas = { if (recursos.financas) tela = "financas" },
+                )
+            }
         }
     }
 }
@@ -87,13 +102,12 @@ fun DashboardScreen(repo: RoxouRepository, recursos: Recursos) {
  * Embaixo: ajustes da janela, resumo das ofertas e o aviso de bateria (para o celular não fechar o Radar).
  */
 @Composable
-private fun RadarToggle(repo: RoxouRepository, notaMinima: Double) {
+private fun RadarToggle(repo: RoxouRepository, notaMinima: Double, onResumo: (OfferStats) -> Unit) {
     val context = LocalContext.current
     val on by Radar.flow(context).collectAsStateWithLifecycle()
     val ligado = on ?: true
     val cor = if (ligado) RoxouColors.Green else RoxouColors.TextMuted
     var ajustes by remember { mutableStateOf(false) }
-    var resumo by remember { mutableStateOf(false) }
     var segundoPlano by remember { mutableStateOf(false) }
     var bateriaOk by remember { mutableStateOf(bateriaLiberada(context)) }
     var voltou by remember { mutableStateOf(0) }
@@ -109,7 +123,7 @@ private fun RadarToggle(repo: RoxouRepository, notaMinima: Double) {
         voltou++
         onPauseOrDispose { }
     }
-    val stats by produceState<OfferStats?>(null, resumo, voltou) {
+    val stats by produceState<OfferStats?>(null, voltou) {
         value = withContext(Dispatchers.IO) {
             OfferStatsEngine.compute(OfferLog.readAll(context), ZoneId.systemDefault(), LocalDate.now())
         }
@@ -139,7 +153,7 @@ private fun RadarToggle(repo: RoxouRepository, notaMinima: Double) {
             Text(
                 if (st == null || st.total == 0) "Nenhuma oferta guardada ainda" else "Hoje: ${st.todayTotal} ofertas · ${st.todayAccepted} aceitas  ›",
                 color = RoxouColors.TextSecondary, fontSize = 13.sp, maxLines = 1,
-                modifier = Modifier.weight(1f).clickable { if (st != null && st.total > 0) resumo = true },
+                modifier = Modifier.weight(1f).clickable { if (st != null && st.total > 0) onResumo(st) },
             )
             Text(
                 "⚙ Janela", color = RoxouColors.PurpleSoft, fontSize = 14.sp, fontWeight = FontWeight.Bold,
@@ -156,7 +170,6 @@ private fun RadarToggle(repo: RoxouRepository, notaMinima: Double) {
         }
     }
     if (ajustes) JanelaAjustesDialog(repo, notaMinima) { ajustes = false }
-    if (resumo) stats?.let { ResumoOfertasDialog(it) { resumo = false } }
     if (segundoPlano) SegundoPlanoDialog { segundoPlano = false }
 }
 
