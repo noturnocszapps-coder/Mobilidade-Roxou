@@ -9,14 +9,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import br.com.roxou.mobilidade.leitura.data.PreferencesManager
 import br.com.roxou.mobilidade.leitura.ui.components.MainScaffold
-import br.com.roxou.mobilidade.leitura.ui.theme.Theme.RoxouMobilidadeLeituraTheme
+import br.com.roxou.mobilidade.leitura.ui.theme.RoxouMobilidadeLeituraTheme
 
 class MainActivity : ComponentActivity() {
     private lateinit var prefsManager: PreferencesManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        prefsManager = PreferencesManager(this)
+        prefsManager = PreferencesManager.get(this)
 
         setContent {
             RoxouMobilidadeLeituraTheme {

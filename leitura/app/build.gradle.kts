@@ -60,6 +60,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3:1.3.0")
+    implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.navigation:navigation-compose:2.8.1")
 
     // Room 2.6.1 & KSP
@@ -70,6 +71,9 @@ dependencies {
 
     // Gson for JSON export
     implementation("com.google.code.gson:gson:2.11.0")
+
+    // OCR no próprio celular, com o modelo embutido (funciona sem internet)
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

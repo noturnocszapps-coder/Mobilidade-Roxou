@@ -6,7 +6,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-class PreferencesManager(context: Context) {
+/**
+ * Instância única, compartilhada entre as telas e o serviço de acessibilidade.
+ * Antes cada um criava a sua, e o serviço nunca via o "Gravar agora" ligado nem a lista de pacotes atualizada.
+ */
+class PreferencesManager private constructor(context: Context) {
+    companion object {
+        @Volatile private var instance: PreferencesManager? = null
+        fun get(context: Context): PreferencesManager =
+            instance ?: synchronized(this) {
+                instance ?: PreferencesManager(context.applicationContext).also { instance = it }
+            }
+    }
+
     private val prefs: SharedPreferences = context.getSharedPreferences("leitura_prefs", Context.MODE_PRIVATE)
 
     private val _isRecording = MutableStateFlow(prefs.getBoolean("is_recording", false))
