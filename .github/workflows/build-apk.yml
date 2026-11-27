@@ -61,6 +61,28 @@ jobs:
           path: android/${{ steps.apk.outputs.nome }}
           retention-days: 30
 
+      # APK de testador: R8, trava sozinho depois de ROXOU_TESTADOR_HORAS (padrão 48 h) contadas
+      # a partir deste build. Para mandar um novo, rode este workflow de novo (Re-run jobs).
+      - name: Gerar o APK de testador
+        id: testador
+        env:
+          ROXOU_TESTADOR_HORAS: ${{ vars.ROXOU_TESTADOR_HORAS || '48' }}
+        run: |
+          export ROXOU_CERT_SHA256=$(keytool -list -v -keystore keystore/debug.keystore -storepass android -alias androiddebugkey | grep 'SHA256:' | head -1 | awk '{print $2}')
+          ./gradlew assembleTestador --no-daemon
+          VENCE=$(TZ=America/Sao_Paulo date -d "+${ROXOU_TESTADOR_HORAS} hours" '+%d-%m-%Hh%M')
+          NOME="roxou-testador-vence-${VENCE}.apk"
+          cp app/build/outputs/apk/testador/app-testador.apk "$NOME"
+          echo "nome=$NOME" >> "$GITHUB_OUTPUT"
+          echo "### APK de testador: vence em ${VENCE} (horário de Brasília)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guardar o APK de testador
+        uses: actions/upload-artifact@v4
+        with:
+          name: roxou-testador-apk
+          path: android/${{ steps.testador.outputs.nome }}
+          retention-days: 7
+
       - name: Guardar o relatório dos testes
         if: always()
         uses: actions/upload-artifact@v4

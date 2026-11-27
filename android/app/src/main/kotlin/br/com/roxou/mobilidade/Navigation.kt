@@ -125,6 +125,13 @@ fun RoxouNavHost(repo: RoxouRepository) {
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 
     RoxouDesignTheme {
+        if (conta.testador && conta.situacao == br.com.roxou.mobilidade.licenca.Situacao.VENCIDA) {
+            // APK de testador vencido: o app inteiro fica travado. Só um APK novo libera.
+            Box(Modifier.fillMaxSize().background(RoxouColors.Background).safeDrawingPadding()) {
+                TesteEncerradoScreen()
+            }
+            return@RoxouDesignTheme
+        }
         if (!boasVindas) {
             // Margem das barras do sistema: o "Depois" ficava atrás da barra de navegação.
             Box(Modifier.fillMaxSize().background(RoxouColors.Background).safeDrawingPadding()) {

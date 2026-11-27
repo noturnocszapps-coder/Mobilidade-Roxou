@@ -11,7 +11,11 @@ import br.com.roxou.mobilidade.licenca.Licenca
 import br.com.roxou.mobilidade.licenca.LicencaVerifier
 import br.com.roxou.mobilidade.licenca.Modulo
 import br.com.roxou.mobilidade.licenca.Situacao
+import java.net.HttpURLConnection
+import java.net.URL
 import java.security.MessageDigest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -27,6 +31,8 @@ data class EstadoConta(
     /** APK de teste sem chave configurada: tudo liberado. Nunca acontece no APK de venda. */
     val modoTeste: Boolean,
     val contaDisponivel: Boolean,
+    /** APK de testador. Nele, diasRestantes conta HORAS restantes. */
+    val testador: Boolean = false,
 )
 
 /**
@@ -40,8 +46,11 @@ class LicencaStore private constructor(context: Context) {
     @SuppressLint("HardwareIds")
     val aparelhoId: String = Settings.Secure.getString(app.contentResolver, Settings.Secure.ANDROID_ID) ?: "sem-id"
 
+    /** APK de testador: data de validade fixa, gravada na hora do build. Reinstalar não renova. */
+    val testador: Boolean = BuildConfig.TESTE_EXPIRA_SEG > 0
+
     /** Só no APK de teste (debug) e só se a chave pública não foi configurada. */
-    val modoTeste: Boolean = BuildConfig.DEBUG && BuildConfig.CHAVE_PUBLICA.isBlank()
+    val modoTeste: Boolean = BuildConfig.DEBUG && BuildConfig.CHAVE_PUBLICA.isBlank() && !testador
     private val apkOriginal: Boolean by lazy { BuildConfig.DEBUG || assinaturaOriginal(app) }
 
     private val _estado = MutableStateFlow(calcularEstado())
@@ -65,7 +74,10 @@ class LicencaStore private constructor(context: Context) {
         return Acesso.agoraSeguro(real, maior)
     }
 
+    private fun testeValendo(): Boolean = apkOriginal && agora() <= BuildConfig.TESTE_EXPIRA_SEG
+
     fun liberado(modulo: Modulo): Boolean {
+        if (testador) return testeValendo()
         if (modoTeste) return true
         if (!apkOriginal) return false
         return Acesso.liberado(licenca(), modulo, agora(), aparelhoId)
@@ -79,6 +91,22 @@ class LicencaStore private constructor(context: Context) {
 
     fun salvarLogin(sessao: String, token: String) {
         prefs.edit().putString(K_SESSAO, sessao).putString(K_TOKEN, token).apply()
+        atualizar()
+    }
+
+    /**
+     * Acerta o "maior horário já visto" pela hora da internet (cabeçalho Date do Google).
+     * Assim, voltar o relógio do celular não estica o prazo do APK de testador.
+     */
+    suspend fun sincronizarHora() = withContext(Dispatchers.IO) {
+        runCatching {
+            val con = (URL("https://www.google.com/generate_204").openConnection() as HttpURLConnection).apply {
+                requestMethod = "HEAD"; connectTimeout = 8_000; readTimeout = 8_000
+            }
+            val data = con.date / 1000
+            con.disconnect()
+            if (data > prefs.getLong(K_MAIOR_HORA, 0)) prefs.edit().putLong(K_MAIOR_HORA, data).apply()
+        }
         atualizar()
     }
 
@@ -101,6 +129,18 @@ class LicencaStore private constructor(context: Context) {
     fun atualizar() { _estado.value = calcularEstado() }
 
     private fun calcularEstado(): EstadoConta {
+        if (testador) {
+            val agora = agora()
+            val valendo = testeValendo()
+            return EstadoConta(
+                logado = false, email = null, plano = "testador",
+                modulos = if (valendo) Modulo.entries.toSet() else emptySet(),
+                validoAteSeg = BuildConfig.TESTE_EXPIRA_SEG,
+                situacao = if (valendo) Situacao.EM_DIA else Situacao.VENCIDA,
+                diasRestantes = ((BuildConfig.TESTE_EXPIRA_SEG - agora) / 3600).coerceAtLeast(0).toInt(),
+                modoTeste = false, contaDisponivel = false, testador = true,
+            )
+        }
         val lic = licenca()?.takeIf { it.aparelho == aparelhoId && apkOriginal }
         val agora = agora()
         val situacao = Acesso.situacao(lic, agora)
@@ -115,6 +155,7 @@ class LicencaStore private constructor(context: Context) {
             diasRestantes = Acesso.diasRestantes(lic, agora),
             modoTeste = modoTeste,
             contaDisponivel = BuildConfig.API_URL.isNotBlank(),
+            testador = false,
         )
     }
 

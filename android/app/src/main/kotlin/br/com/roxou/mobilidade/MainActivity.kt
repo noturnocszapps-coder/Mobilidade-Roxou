@@ -16,7 +16,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val repo = (application as RoxouApp).repository
         // Renova a licença em silêncio quando houver internet. Sem internet, segue com a guardada.
-        lifecycleScope.launch { RoxouApi(LicencaStore.get(this@MainActivity)).renovarSePreciso() }
+        val licencas = LicencaStore.get(this)
+        lifecycleScope.launch { RoxouApi(licencas).renovarSePreciso() }
+        if (licencas.testador) lifecycleScope.launch { licencas.sincronizarHora() }
         setContent {
             RoxouTheme { RoxouNavHost(repo) }
         }

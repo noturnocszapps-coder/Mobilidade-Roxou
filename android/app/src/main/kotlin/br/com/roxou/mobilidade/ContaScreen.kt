@@ -137,6 +137,8 @@ fun ContaCard(onAbrir: () -> Unit) {
 }
 
 internal fun resumo(e: EstadoConta) = when {
+    e.testador && e.situacao == Situacao.VENCIDA -> "Teste encerrado"
+    e.testador -> "Versão de teste · faltam ${e.diasRestantes} h"
     e.modoTeste -> "Versão de teste: tudo liberado"
     !e.contaDisponivel -> "Conta indisponível nesta versão"
     e.situacao == Situacao.EM_DIA && e.plano != "gratis" -> "${nomePlano(e.plano)} · faltam ${e.diasRestantes} dias"
@@ -274,4 +276,17 @@ private fun Pix(vm: ContaViewModel, ctx: Context) {
     }
     Text("Esperando o pagamento...", style = MaterialTheme.typography.bodySmall)
     OutlinedButton(onClick = vm::jaPaguei, enabled = !vm.carregando, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Já paguei") }
+}
+
+/** APK de testador vencido: trava o app inteiro. */
+@Composable
+fun TesteEncerradoScreen() {
+    Column(
+        Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp, androidx.compose.ui.Alignment.CenterVertically),
+    ) {
+        Text("🔒", fontSize = 56.sp)
+        Text("Teste encerrado", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text("O período de teste desta versão do Roxou Mobilidade acabou. Fale com quem te enviou o app para continuar.", fontSize = 18.sp)
+    }
 }

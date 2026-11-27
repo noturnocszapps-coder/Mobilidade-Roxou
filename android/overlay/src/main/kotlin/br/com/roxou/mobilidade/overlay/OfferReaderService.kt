@@ -71,6 +71,7 @@ class OfferReaderService : AccessibilityService() {
         repo = RoxouRepository.get(this)
         licencas = LicencaStore.get(this)
         scope.launch { RoxouApi(licencas).renovarSePreciso() }
+        if (licencas.testador) scope.launch { licencas.sincronizarHora() }
         panel = FloatingPanel(this, ::openWaze) { logAccepted(byButton = true) }
         scope.launch { repo.state.collect { state = it } }
     }
@@ -214,7 +215,7 @@ class OfferReaderService : AccessibilityService() {
         val dia = System.currentTimeMillis() / 86_400_000
         if (dia == avisoProDia) return
         avisoProDia = dia
-        Toast.makeText(this, "A leitura automática é do plano Pro. Abra o Roxou > Ajustes para testar grátis.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Leitura automática bloqueada. Abra o Roxou para ver o seu plano.", Toast.LENGTH_LONG).show()
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
