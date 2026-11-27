@@ -158,6 +158,21 @@ class FloatingPanel(
         }
     }
 
+    /** Corrida aceita em andamento: a janelinha mostra o próximo passo (embarque ou destino). */
+    val inRide: Boolean get() = mode == Mode.WAZE
+
+    /** O passageiro entrou: o botão passa a levar ao destino. */
+    fun passengerOnBoard() {
+        if (mode != Mode.WAZE || nextIsDropoff) return
+        nextIsDropoff = true
+        render()
+    }
+
+    /** Viagem terminou: a janelinha some. */
+    fun rideEnded() {
+        if (mode == Mode.WAZE) setMode(Mode.NONE)
+    }
+
     fun setDriverAppOnScreen(onScreen: Boolean) {
         if (driverAppOnScreen == onScreen) return
         driverAppOnScreen = onScreen
@@ -255,9 +270,26 @@ class FloatingPanel(
         // O próximo passo fica aceso; o outro fica apagado (mas continua funcionando).
         pickupButton.alpha = if (nextIsDropoff) 0.45f else 1f
         dropoffButton.alpha = if (nextIsDropoff) 1f else 0.45f
-        val wazeVis = if (hasAddress) View.VISIBLE else View.GONE
-        pickupButton.visibility = wazeVis
-        dropoffButton.visibility = wazeVis
+        val map = PanelPrefs.mapApp(context).label
+        if (mode == Mode.WAZE) {
+            // Corrida aceita: só o botão do passo atual, grande o bastante para tocar com o carro parado.
+            pickupButton.text = "➜ Ir ao embarque · $map"
+            dropoffButton.text = "➜ Ir ao destino · $map"
+            pickupButton.textSize = 14f
+            dropoffButton.textSize = 14f
+            pickupButton.alpha = 1f
+            dropoffButton.alpha = 1f
+            pickupButton.visibility = if (hasAddress && !nextIsDropoff) View.VISIBLE else View.GONE
+            dropoffButton.visibility = if (hasAddress && nextIsDropoff) View.VISIBLE else View.GONE
+        } else {
+            pickupButton.text = "Embarque"
+            dropoffButton.text = "Destino"
+            pickupButton.textSize = 12f
+            dropoffButton.textSize = 12f
+            val wazeVis = if (hasAddress) View.VISIBLE else View.GONE
+            pickupButton.visibility = wazeVis
+            dropoffButton.visibility = wazeVis
+        }
         root.requestLayout()
         if (attached) runCatching { wm.updateViewLayout(root, params) }
     }

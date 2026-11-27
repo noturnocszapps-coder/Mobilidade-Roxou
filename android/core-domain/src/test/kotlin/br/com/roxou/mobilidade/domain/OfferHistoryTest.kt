@@ -77,4 +77,12 @@ class OfferHistoryTest {
         assertEquals(DayOfWeek.MONDAY, s.bestWeekday)
         assertEquals(8, s.busiestHour)
     }
+
+    @Test fun etapas_da_corrida() {
+        val aCaminho = listOf(line("A caminho do passageiro", 10), line("Iniciar viagem", 60))
+        assertTrue(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksAccepted(aCaminho))
+        assertFalse(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksOnTrip(aCaminho))
+        assertTrue(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksOnTrip(listOf(line("Deslize para finalizar", 10))))
+        assertTrue(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksEnded(listOf(line("Avalie o passageiro", 10))))
+    }
 }

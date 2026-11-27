@@ -92,6 +92,7 @@ class OfferReaderService : AccessibilityService() {
         if (now - lastCheck < 300) return
         lastCheck = now
         checkForOffer(now)
+        checkRideStage(now)
     }
 
     private fun checkForOffer(now: Long) {
@@ -212,6 +213,27 @@ class OfferReaderService : AccessibilityService() {
             RideNotification.show(this, listOfNotNull(offer.pickupAddress, offer.dropoffAddress).joinToString(" → "))
         }
         toast(if (byButton) "Corrida registrada (a confirmar)" else "Aceite detectado: corrida registrada (a confirmar)")
+    }
+
+    private var lastStageCheck = 0L
+
+    /**
+     * Corrida aceita: de tempos em tempos olha a tela da Uber/99.
+     * Passageiro a bordo ("finalizar viagem") → o botão vira "Ir ao destino". Viagem acabou → a janelinha some.
+     */
+    private fun checkRideStage(now: Long) {
+        val p = panel ?: return
+        if (!p.inRide || offerVisible || shotPending || now - lastStageCheck < 8_000) return
+        lastStageCheck = now
+        shotPending = true
+        screenshotText(null) { lines ->
+            shotPending = false
+            if (lines == null) return@screenshotText
+            when {
+                AcceptDetector.looksEnded(lines) -> p.rideEnded()
+                AcceptDetector.looksOnTrip(lines) -> p.passengerOnBoard()
+            }
+        }
     }
 
     /** Endereços da corrida aceita (para a notificação), só na memória. */
