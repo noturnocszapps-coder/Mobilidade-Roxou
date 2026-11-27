@@ -22,5 +22,8 @@ data class NodeInfoItem(
     val viewIdResourceName: String?,
     val className: String?,
     val bounds: String?,
-    val depth: Int
+    val depth: Int,
+    val childCount: Int = 0,
+    /** hintText, stateDescription, paneTitle e tooltipText, quando existirem. */
+    val extra: String? = null
 )

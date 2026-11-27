@@ -2,6 +2,9 @@ package br.com.roxou.mobilidade.leitura.service
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import br.com.roxou.mobilidade.leitura.data.AppDatabase
@@ -34,6 +37,9 @@ class LeituraAccessibilityService : AccessibilityService() {
         database = AppDatabase.getDatabase(this)
     }
 
+    private val handler = Handler(Looper.getMainLooper())
+    private val pendingCapture = mutableSetOf<String>()
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         if (!prefsManager.isRecording.value) return
@@ -44,58 +50,62 @@ class LeituraAccessibilityService : AccessibilityService() {
         val monitored = prefsManager.monitoredPackages.value
         if (!monitored.contains(packageName)) return
 
+        val eventTypeStr = getEventTypeString(event.eventType)
+        val notificationTexts =
+            if (event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED)
+                event.text.filter { !it.isNullOrBlank() }.map { it.toString() }
+            else emptyList()
+
         val now = System.currentTimeMillis()
         val lastTime = lastSnapshotTimeMap[packageName] ?: 0L
-        if (now - lastTime < 500) {
-            return // Throttling: max 1 snapshot every 500ms per package
+        if (now - lastTime < 500 && notificationTexts.isEmpty()) {
+            // Em vez de descartar, agenda uma nova leitura logo depois:
+            // o cartão de oferta costuma terminar de desenhar alguns ms após o primeiro evento.
+            if (pendingCapture.add(packageName)) {
+                handler.postDelayed({
+                    pendingCapture.remove(packageName)
+                    capture(packageName, "$eventTypeStr+DELAYED", emptyList())
+                }, 600)
+            }
+            return
         }
+        capture(packageName, eventTypeStr, notificationTexts)
+    }
 
-        val eventTypeStr = getEventTypeString(event.eventType)
+    private fun capture(packageName: String, eventTypeStr: String, notificationTexts: List<String>) {
+        val monitored = prefsManager.monitoredPackages.value
         val nodes = mutableListOf<NodeInfoItem>()
 
-        // 1. Traverse rootInActiveWindow
+        // Só as janelas dos apps monitorados (antes entravam chat, barra de status e outros apps).
         try {
-            val rootNode = rootInActiveWindow
-            if (rootNode != null) {
-                traverseNode(rootNode, 0, nodes)
-                rootNode.recycle()
+            var found = false
+            windows?.forEach { window ->
+                val root = window.root ?: return@forEach
+                if ((root.packageName?.toString() ?: "") in monitored) {
+                    found = true
+                    traverseNode(root, 0, nodes)
+                }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        // 2. Traverse getWindows()
-        try {
-            val windows = windows
-            if (windows != null) {
-                for (window in windows) {
-                    val root = window.root
-                    if (root != null) {
-                        traverseNode(root, 0, nodes)
-                        root.recycle()
-                    }
+            if (!found) {
+                rootInActiveWindow?.let { root ->
+                    if ((root.packageName?.toString() ?: "") in monitored) traverseNode(root, 0, nodes)
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
 
-        // 3. For notification events, include event text
-        if (event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
-            for (text in event.text) {
-                if (!text.isNullOrBlank()) {
-                    nodes.add(
-                        NodeInfoItem(
-                            text = text.toString(),
-                            contentDescription = "NotificationText",
-                            viewIdResourceName = "notification_text",
-                            className = "Notification",
-                            bounds = null,
-                            depth = 0
-                        )
-                    )
-                }
-            }
+        for (text in notificationTexts) {
+            nodes.add(
+                NodeInfoItem(
+                    text = text,
+                    contentDescription = "NotificationText",
+                    viewIdResourceName = "notification_text",
+                    className = "Notification",
+                    bounds = null,
+                    depth = 0
+                )
+            )
         }
 
         if (nodes.isEmpty()) return
@@ -115,12 +125,9 @@ class LeituraAccessibilityService : AccessibilityService() {
         val nodeJson = gson.toJson(processedNodes)
         val contentHash = nodeJson.hashCode()
 
-        val lastHash = lastContentHashMap[packageName]
-        if (lastHash == contentHash) {
-            return // Discard identical snapshot to previous
-        }
-
+        val now = System.currentTimeMillis()
         lastSnapshotTimeMap[packageName] = now
+        if (lastContentHashMap[packageName] == contentHash) return
         lastContentHashMap[packageName] = contentHash
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -147,40 +154,44 @@ class LeituraAccessibilityService : AccessibilityService() {
     }
 
     private fun traverseNode(node: AccessibilityNodeInfo, depth: Int, list: MutableList<NodeInfoItem>) {
-        val text = node.text?.toString()
-        val desc = node.contentDescription?.toString()
-        val viewId = node.viewIdResourceName
-        val className = node.className?.toString()
+        if (list.size >= 3000 || depth > 80) return
 
         val rect = Rect()
         node.getBoundsInScreen(rect)
-        val boundsStr = "[${rect.left},${rect.top}][${rect.right},${rect.bottom}]"
 
-        if (!text.isNullOrBlank() || !desc.isNullOrBlank() || !viewId.isNullOrBlank()) {
-            list.add(
-                NodeInfoItem(
-                    text = text,
-                    contentDescription = desc,
-                    viewIdResourceName = viewId,
-                    className = className,
-                    bounds = boundsStr,
-                    depth = depth
-                )
-            )
+        val extras = mutableListOf<String>()
+        node.hintText?.let { extras.add("hint=$it") }
+        if (Build.VERSION.SDK_INT >= 28) {
+            node.paneTitle?.let { extras.add("pane=$it") }
+            node.tooltipText?.let { extras.add("tooltip=$it") }
+        }
+        if (Build.VERSION.SDK_INT >= 30) {
+            node.stateDescription?.let { extras.add("state=$it") }
         }
 
+        // Grava TODOS os nós (mesmo sem texto), para enxergar a estrutura do cartão de oferta.
+        list.add(
+            NodeInfoItem(
+                text = node.text?.toString(),
+                contentDescription = node.contentDescription?.toString(),
+                viewIdResourceName = node.viewIdResourceName,
+                className = node.className?.toString(),
+                bounds = "[${rect.left},${rect.top}][${rect.right},${rect.bottom}]",
+                depth = depth,
+                childCount = node.childCount,
+                extra = extras.takeIf { it.isNotEmpty() }?.joinToString("; ")
+            )
+        )
+
         for (i in 0 until node.childCount) {
-            val child = node.getChild(i)
-            if (child != null) {
-                traverseNode(child, depth + 1, list)
-                child.recycle()
-            }
+            val child = node.getChild(i) ?: continue
+            traverseNode(child, depth + 1, list)
         }
     }
 
     private fun maskPhoneNumber(input: String): String {
         // Regex matching phone number patterns (8 to 15 digits with spaces, dashes, parentheses, optional +)
-        val phoneRegex = Regex("\\+?[0-9][0-9\\s\\-\\(\\)]{7,14}[0-9]")
+        val phoneRegex = Regex("(?<![\\d:/.,])(\\+?55\\s?)?(\\(?\\d{2}\\)?\\s?)?9?\\d{4}[-\\s]?\\d{4}(?![\\d:/.,])")
         return phoneRegex.replace(input) { "***" }
     }
 
@@ -199,6 +210,7 @@ class LeituraAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        handler.removeCallbacksAndMessages(null)
         serviceJob.cancel()
     }
 }
