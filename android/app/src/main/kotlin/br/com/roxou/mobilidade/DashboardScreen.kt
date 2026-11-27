@@ -54,6 +54,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.core.content.ContextCompat
 import br.com.roxou.mobilidade.overlay.PanelPrefs
+import br.com.roxou.mobilidade.overlay.Diag
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -82,10 +85,15 @@ fun DashboardScreen(repo: RoxouRepository, recursos: Recursos) {
     RoxouDesignTheme {
         when (tela) {
             "financas" -> FinancasRoute(repo, st) { tela = null }
+            "diag" -> DiagnosticoScreen { tela = null }
             "ofertas" -> resumo?.let { OfertasResumoRoute(it) { tela = null } } ?: run { tela = null }
             else -> Column(Modifier.fillMaxSize().background(RoxouColors.Background)) {
                 if (recursos.janelaFlutuante) {
-                    RadarToggle(repo, st.settings.offer.minPassengerRating) { stats -> resumo = stats; tela = "ofertas" }
+                    RadarToggle(
+                        repo, st.settings.offer.minPassengerRating,
+                        onResumo = { stats -> resumo = stats; tela = "ofertas" },
+                        onDiagnostico = { tela = "diag" },
+                    )
                 }
                 PainelScreen(
                     s.toPainelUi(recursos),
@@ -102,11 +110,25 @@ fun DashboardScreen(repo: RoxouRepository, recursos: Recursos) {
  * Embaixo: ajustes da janela, resumo das ofertas e o aviso de bateria (para o celular não fechar o Radar).
  */
 @Composable
-private fun RadarToggle(repo: RoxouRepository, notaMinima: Double, onResumo: (OfferStats) -> Unit) {
+private fun RadarToggle(repo: RoxouRepository, notaMinima: Double, onResumo: (OfferStats) -> Unit, onDiagnostico: () -> Unit) {
     val context = LocalContext.current
     val on by Radar.flow(context).collectAsStateWithLifecycle()
     val ligado = on ?: true
-    val cor = if (ligado) RoxouColors.Green else RoxouColors.TextMuted
+    // Estado real: a chave do Radar, a acessibilidade ligada no Android e o serviço conectado de fato.
+    var acessOk by remember { mutableStateOf(Diag.accessibilityEnabled(context)) }
+    val diag by Diag.state.collectAsStateWithLifecycle()
+    val funcionando = ligado && acessOk && diag.serviceAlive
+    val cor = when {
+        !ligado -> RoxouColors.TextMuted
+        funcionando -> RoxouColors.Green
+        else -> RoxouColors.Red
+    }
+    val statusTexto = when {
+        !ligado -> "Desligado"
+        !acessOk -> "Parado: a leitura está desligada no Android"
+        !diag.serviceAlive -> "Parado: o Android fechou a leitura"
+        else -> "Ligado e funcionando"
+    }
     var ajustes by remember { mutableStateOf(false) }
     var segundoPlano by remember { mutableStateOf(false) }
     var bateriaOk by remember { mutableStateOf(bateriaLiberada(context)) }
@@ -120,6 +142,7 @@ private fun RadarToggle(repo: RoxouRepository, notaMinima: Double, onResumo: (Of
     }
     LifecycleResumeEffect(Unit) {
         bateriaOk = bateriaLiberada(context)
+        acessOk = Diag.accessibilityEnabled(context)
         voltou++
         onPauseOrDispose { }
     }
@@ -140,7 +163,7 @@ private fun RadarToggle(repo: RoxouRepository, notaMinima: Double, onResumo: (Of
             Box(Modifier.size(12.dp).clip(CircleShape).background(cor))
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
                 Text("Radar de corridas", color = RoxouColors.TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text(if (ligado) "Ligado: avaliando as ofertas" else "Desligado", color = RoxouColors.TextSecondary, fontSize = 13.sp, maxLines = 1)
+                Text(statusTexto, color = if (ligado && !funcionando) RoxouColors.Red else RoxouColors.TextSecondary, fontSize = 13.sp, maxLines = 1)
             }
             Switch(
                 checked = ligado,
@@ -156,8 +179,21 @@ private fun RadarToggle(repo: RoxouRepository, notaMinima: Double, onResumo: (Of
                 modifier = Modifier.weight(1f).clickable { if (st != null && st.total > 0) onResumo(st) },
             )
             Text(
+                "Diagnóstico", color = RoxouColors.TextSecondary, fontSize = 13.sp,
+                modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { onDiagnostico() }.padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+            Text(
                 "⚙ Janela", color = RoxouColors.PurpleSoft, fontSize = 14.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { ajustes = true }.padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+        if (ligado && !funcionando) {
+            Text(
+                "Toque aqui e ligue \"Roxou\" em Apps instalados (ou Serviços instalados)",
+                color = RoxouColors.Red, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth().clickable {
+                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }.padding(start = 18.dp, end = 18.dp, bottom = 12.dp),
             )
         }
         if (ligado && !bateriaOk) {

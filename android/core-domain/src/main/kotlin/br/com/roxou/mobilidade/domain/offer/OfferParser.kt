@@ -23,6 +23,11 @@ data class ParsedOffer(
     val dropoffAddress: String? = null,
     /** Nota do passageiro (ex.: 4,88), quando aparece no cartão. */
     val passengerRating: Double? = null,
+    /**
+     * Algum tempo lido não combina com a distância (ex.: 12 km em 3 min = 240 km/h):
+     * o OCR provavelmente perdeu um dígito. O avaliador estima o tempo pela distância.
+     */
+    val timeSuspect: Boolean = false,
 ) {
     /** Chave para não mostrar a mesma oferta duas vezes. */
     val key: String get() = "$platform|$fareCents|$pickupKm|$tripKm|$tripMinutes"
@@ -92,6 +97,7 @@ object OfferParser {
             pickupAddress = joinAddress(pickupAddr),
             dropoffAddress = joinAddress(dropAddr),
             passengerRating = findRating(sorted.filter { it.top < pickupLine.top }),
+            timeSuspect = implausible(pickup.first, pickup.second) || implausible(trip.first, trip.second),
         )
     }
 
@@ -108,6 +114,20 @@ object OfferParser {
                     timeDist.find(it.text) == null
             }
             joinAddress(listOfNotNull(line, cont))
+        }
+    }
+
+    /** Mais de 100 km/h na cidade, ou tempo zero com distância de verdade: leitura errada. */
+    fun implausible(km: Double, minutes: Int): Boolean =
+        (minutes <= 0 && km > 0.3) || (minutes > 0 && km / (minutes / 60.0) > 100.0)
+
+    /** Qual app mostrou a oferta, pelo texto do cartão (quando a janela não diz). */
+    fun platformHint(lines: List<OcrLine>): Platform? {
+        val t = lines.joinToString(" ") { it.text }
+        return when {
+            Regex("""(?i)\buber\s?(x|black|comfort|flash|moto|bag|exclusivo|adolescente|teens?|planet|juntos)\b|\buberx\b""").containsMatchIn(t) -> Platform.UBER
+            Regex("""(?i)\b99\s?(pop|top|comfort|moto|entrega)\b|taxa99|\bnegocia\b""").containsMatchIn(t) -> Platform.NINETY_NINE
+            else -> null
         }
     }
 

@@ -197,6 +197,7 @@ class FloatingPanel(
 
     private fun setMode(m: Mode) {
         mode = m
+        Diag.update { it.copy(panel = when (m) { Mode.NONE -> "escondida"; Mode.OFFER -> "mostrando a oferta"; Mode.WAZE -> "botão do mapa (corrida aceita)" }) }
         render()
         refreshVisibility()
     }
@@ -211,9 +212,12 @@ class FloatingPanel(
 
     private fun refreshVisibility() {
         val show = driverAppOnScreen && mode != Mode.NONE && evaluation != null
+        if (mode == Mode.OFFER && !driverAppOnScreen) Diag.update { it.copy(panel = "oferta lida, mas escondida: Uber/99 não estava na frente") }
         if (show && !attached) {
             applyPosition()
-            runCatching { wm.addView(root, params) }.onSuccess { attached = true }
+            runCatching { wm.addView(root, params) }
+                .onSuccess { attached = true }
+                .onFailure { Diag.error("janela", it) }
         } else if (!show && attached) {
             runCatching { wm.removeView(root) }
             attached = false
@@ -237,7 +241,9 @@ class FloatingPanel(
         }
         mainView.text = String.format(pt, "R$ %.2f/km", e.perKmCents / 100.0)
         val rating = e.offer.passengerRating?.let { String.format(pt, " · ★ %.2f", it) }.orEmpty()
-        detailView.text = String.format(pt, "R$ %.0f/h", e.perHourCents / 100.0) + rating
+        // R$/h já conta a busca + a viagem; o total de minutos fica à vista para conferir.
+        val approx = if (e.timeEstimated) "≈" else ""
+        detailView.text = String.format(pt, "%sR$ %.0f/h · %s%d min", approx, e.perHourCents / 100.0, approx, e.totalMinutes) + rating
 
         val blockedArea = listOf(e.pickupArea, e.dropoffArea).firstOrNull { it.blocked }
         val unknown = listOf(e.pickupArea, e.dropoffArea).firstOrNull { it.unknownCode != null }
