@@ -23,6 +23,7 @@ import br.com.roxou.mobilidade.domain.offer.OfferEvaluator
 import br.com.roxou.mobilidade.domain.offer.OfferOutcome
 import br.com.roxou.mobilidade.domain.offer.OfferRecord
 import br.com.roxou.mobilidade.domain.offer.OfferParser
+import br.com.roxou.mobilidade.domain.offer.ReadPlan
 import br.com.roxou.mobilidade.domain.offer.ParsedOffer
 import br.com.roxou.mobilidade.domain.offer.TierContext
 import br.com.roxou.mobilidade.domain.rental.VehicleOwnership
@@ -205,12 +206,22 @@ class OfferReaderService : AccessibilityService() {
         }
         lastOfferSeen = now
         if (shotPending) return
-        when {
+        val plan = ReadPlan.decide(
+            offerRead = readKey != null, tries = triesThisOffer, msSinceRead = now - readAt, rereads = rereads,
+            msSinceLastShot = now - lastShot, recentWindowChange = now - lastDriverWindowChange < 4_000,
+        )
+        when (plan) {
             // Ainda não leu: tenta até 8 vezes (o cartão anima ao entrar).
-            readKey == null && triesThisOffer < 8 -> shoot(if (triesThisOffer == 0) 400L else 1_100L, found, byScan = false)
-            readKey == null && triesThisOffer == 8 -> { triesThisOffer++; Diag.discard("${appName(found)}: cartão na tela, mas 8 leituras sem achar valor e os dois tempos") }
+            ReadPlan.Action.FIRST_TRIES -> shoot(if (triesThisOffer == 0) 400L else 1_100L, found, byScan = false)
+            ReadPlan.Action.GIVE_UP_NOTICE -> {
+                triesThisOffer++
+                Diag.discard("${appName(found)}: marca de cartão na tela sem oferta (tela da corrida?). Sigo lendo de tempos em tempos.")
+            }
             // Já leu: confere a cada 3 s se a oferta mudou (a próxima pode vir sem o cartão sumir).
-            readKey != null && now - readAt > 3_000 && rereads < 10 -> { rereads++; shoot(0, found, byScan = false) }
+            ReadPlan.Action.REREAD -> { rereads++; shoot(0, found, byScan = false) }
+            // Nunca desiste: a marca do cartão pode ficar na tela da corrida e a oferta nova vem por cima.
+            ReadPlan.Action.KEEP_WATCHING -> { lastScan = now; shoot(0, found, byScan = true) }
+            ReadPlan.Action.WAIT -> Unit
         }
     }
 
@@ -266,7 +277,8 @@ class OfferReaderService : AccessibilityService() {
         val offer = OfferParser.parse(lines, platform)
         if (offer == null) {
             if (byScan) {
-                if (offerVisible && offerByScan) endOffer("leitura não achou mais a oferta")
+                // Oferta lida e agora sumiu (inclusive a que veio por cima da corrida, com a marca do cartão ainda na tela).
+                if (offerVisible && (offerByScan || readKey != null)) endOffer("leitura não achou mais a oferta")
                 else {
                     watchAccept(lines)
                     if (panel?.inRide == true) applyRideStage(lines)
@@ -339,8 +351,9 @@ class OfferReaderService : AccessibilityService() {
         handler.postDelayed({
             if (offer.key != lastOffer?.key || offer.key in loggedKeys) return@postDelayed
             screenshotText(null) { lines ->
+                // Com outra corrida em andamento, "a caminho" e afins são da corrida atual: aí só vale a rua do embarque nova.
                 val accepted = lines != null && driverAppFullScreen() && (
-                    AcceptDetector.looksAccepted(lines) ||
+                    (panel?.inRide != true && AcceptDetector.looksAccepted(lines)) ||
                         // A navegação da 99 até o passageiro mostra a rua do embarque desta oferta.
                         AcceptDetector.mentionsStreet(lines, offer.pickupAddress)
                     )
@@ -363,7 +376,7 @@ class OfferReaderService : AccessibilityService() {
         val o = lastOffer ?: return
         if (SystemClock.uptimeMillis() > acceptWatchUntil || o.key in loggedKeys) return
         if (!driverAppFullScreen()) return
-        if (AcceptDetector.looksAccepted(lines) || AcceptDetector.mentionsStreet(lines, o.pickupAddress)) {
+        if ((panel?.inRide != true && AcceptDetector.looksAccepted(lines)) || AcceptDetector.mentionsStreet(lines, o.pickupAddress)) {
             Diag.log("Aceite visto numa leitura depois que a oferta saiu")
             logAccepted(byButton = false)
         }
