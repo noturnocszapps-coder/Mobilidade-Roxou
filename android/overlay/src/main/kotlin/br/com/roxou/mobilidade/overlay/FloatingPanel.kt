@@ -65,14 +65,16 @@ class FloatingPanel(
         setPadding(dp(6), dp(2), dp(6), dp(2))
         background = GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(red) }
     }
-    // Botões grandes o bastante para o dedo com o carro parado (Fernando, 27/11): pelo menos 44 dp de altura.
-    private fun pill(label: String, bg: Int, fg: Int = Color.BLACK) = text(14f, fg, bold = true).apply {
+    // Área de toque de 44 dp, mas o desenho do botão continua pequeno (a margem invisível fica
+    // em volta da pílula), para não mudar a estética do balão (Fernando, 27/11).
+    private fun pill(label: String, bg: Int, fg: Int = Color.BLACK) = text(13f, fg, bold = true).apply {
         text = label
         gravity = Gravity.CENTER
         minHeight = dp(44)
-        minWidth = dp(48)
-        setPadding(dp(14), dp(8), dp(14), dp(8))
-        background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(bg) }
+        setPadding(dp(12), dp(0), dp(12), dp(0))
+        background = android.graphics.drawable.InsetDrawable(
+            GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(bg) }, 0, dp(7), 0, dp(7),
+        )
     }
     /** Etapa 1: até o passageiro (ponto A). Etapa 2: do ponto A até o destino (ponto B). */
     private val pickupButton = pill("Embarque", Color.parseColor("#33CCFF"))
@@ -80,20 +82,19 @@ class FloatingPanel(
     /** Plano B do aceite automático: um toque grava a corrida no histórico. Não aceita nada na Uber/99. */
     private val acceptButton = pill("✔", green)
     /** Fechar: grande e longe do ✔, para não marcar aceite sem querer. */
-    private val hideView = text(20f, Color.WHITE, bold = true).apply {
+    private val hideView = text(18f, Color.parseColor("#AAAAAA"), bold = true).apply {
         text = "✕"
         gravity = Gravity.CENTER
         minHeight = dp(44)
-        minWidth = dp(52)
-        background = GradientDrawable().apply { cornerRadius = dp(22).toFloat(); setColor(Color.parseColor("#55555A")) }
+        minWidth = dp(44)
     }
     private val buttons = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         addView(pickupButton)
-        addView(dropoffButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
-        addView(acceptButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
-        addView(hideView, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(28) })
+        addView(dropoffButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+        addView(acceptButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+        addView(hideView, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(18) })
     }
 
     private val root = LinearLayout(context).apply {
@@ -105,7 +106,7 @@ class FloatingPanel(
         addView(mainView)
         addView(detailView)
         addView(alertView, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(3) })
-        addView(buttons, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(5) })
+        addView(buttons, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(0) })
     }
 
     private val params = WindowManager.LayoutParams(
@@ -334,7 +335,7 @@ class FloatingPanel(
         acceptButton.visibility = if (logged || !(offerMode || tentative)) View.GONE else View.VISIBLE
         // Sem aceite visto, a janela só PERGUNTA (o botão do Waze aparecia e parecia aceite; Fernando, 27/11).
         acceptButton.text = if (tentative) "Aceitou esta corrida? ✔ Sim" else "✔"
-        acceptButton.textSize = if (tentative) 15f else 16f
+        acceptButton.textSize = if (tentative) 14f else 15f
         // O próximo passo fica aceso; o outro fica apagado (mas continua funcionando).
         pickupButton.alpha = if (nextIsDropoff) 0.45f else 1f
         dropoffButton.alpha = if (nextIsDropoff) 1f else 0.45f
@@ -343,8 +344,8 @@ class FloatingPanel(
             // Corrida aceita: só o botão do passo atual, grande o bastante para tocar com o carro parado.
             pickupButton.text = "➜ Ir ao embarque · $map"
             dropoffButton.text = "➜ Ir ao destino · $map"
-            pickupButton.textSize = 16f
-            dropoffButton.textSize = 16f
+            pickupButton.textSize = 14f
+            dropoffButton.textSize = 14f
             pickupButton.alpha = 1f
             dropoffButton.alpha = 1f
             pickupButton.visibility = if (hasAddress && !nextIsDropoff && !tentative) View.VISIBLE else View.GONE
@@ -352,8 +353,8 @@ class FloatingPanel(
         } else {
             pickupButton.text = "Embarque"
             dropoffButton.text = "Destino"
-            pickupButton.textSize = 14f
-            dropoffButton.textSize = 14f
+            pickupButton.textSize = 13f
+            dropoffButton.textSize = 13f
             val wazeVis = if (hasAddress) View.VISIBLE else View.GONE
             pickupButton.visibility = wazeVis
             dropoffButton.visibility = wazeVis
