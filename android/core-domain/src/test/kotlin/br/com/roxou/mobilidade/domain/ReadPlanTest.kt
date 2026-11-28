@@ -46,4 +46,16 @@ class ReadPlanTest {
         org.junit.Assert.assertTrue(d.looksIdle(ls("Solicitações (4) Nova", "Buscando")))
         org.junit.Assert.assertFalse(d.looksIdle(ls("5 min", "2,3 km", "Destino de Maria")))
     }
+
+    /** Recusou no X da Uber/99: a tela volta para a espera. Mesmo com a rua do embarque no mapa, não é aceite. */
+    @Test fun recusou_e_voltou_para_espera_nao_e_aceite() {
+        fun ls(vararg t: String) = t.mapIndexed { i, x -> br.com.roxou.mobilidade.domain.offer.OcrLine(x, 0, i * 100, 500, i * 100 + 40) }
+        val d = br.com.roxou.mobilidade.domain.offer.AcceptDetector
+        val uber = ls("Rua Doutor José Foz", "+R$ 1", "Você está online")
+        org.junit.Assert.assertTrue(d.looksIdle(uber))
+        org.junit.Assert.assertFalse(d.looksAccepted(uber))
+        val noventaENove = ls("Rua Doutor José Foz", "Solicitações (4)", "Buscando")
+        org.junit.Assert.assertTrue(d.looksIdle(noventaENove))
+        org.junit.Assert.assertFalse(d.looksAccepted(noventaENove))
+    }
 }

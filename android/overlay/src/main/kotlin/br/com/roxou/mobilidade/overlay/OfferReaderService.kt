@@ -113,7 +113,8 @@ class OfferReaderService : AccessibilityService() {
         // Toque no botão "Aceitar" da Uber/99 (quando o app entrega esse evento): registra o aceite na hora.
         if (type == AccessibilityEvent.TYPE_VIEW_CLICKED && pkg in DRIVER_APPS) {
             val t = (event.text.joinToString(" ") + " " + (event.contentDescription ?: "")).lowercase()
-            if (("aceitar" in t || "accept" in t) && lastOffer != null && SystemClock.uptimeMillis() - lastOfferShownAt < 60_000) {
+            val refuse = Regex("recusar|rejeitar|ignorar|nao aceitar|não aceitar|decline|reject").containsMatchIn(t)
+            if (("aceitar" in t || "accept" in t) && !refuse && lastOffer != null && SystemClock.uptimeMillis() - lastOfferShownAt < 60_000) {
                 Diag.log("Toque em Aceitar visto pela acessibilidade")
                 logAccepted(byButton = false)
             }
@@ -358,6 +359,14 @@ class OfferReaderService : AccessibilityService() {
         handler.postDelayed({
             if (offer.key != lastOffer?.key || offer.key in loggedKeys) return@postDelayed
             screenshotText(null) { lines ->
+                // Voltou para a tela de espera ("Você está online", "Procurando viagens", "Buscando"):
+                // o motorista recusou ou a oferta expirou. Fica recusada e nada de pergunta nem botão.
+                if (lines != null && driverAppFullScreen() && AcceptDetector.looksIdle(lines)) {
+                    Diag.log("Oferta recusada/expirada: a tela voltou para a espera")
+                    acceptWatchUntil = 0
+                    record(OfferOutcome.REJECTED)
+                    return@screenshotText
+                }
                 // Com outra corrida em andamento, "a caminho" e afins são da corrida atual: aí só vale a rua do embarque nova.
                 val accepted = lines != null && driverAppFullScreen() && (
                     (panel?.inRide != true && AcceptDetector.looksAccepted(lines)) ||
@@ -383,6 +392,8 @@ class OfferReaderService : AccessibilityService() {
         val o = lastOffer ?: return
         if (SystemClock.uptimeMillis() > acceptWatchUntil || o.key in loggedKeys) return
         if (!driverAppFullScreen()) return
+        // Tela de espera: o mapa mostra ruas próximas (às vezes a do embarque), mas não é aceite.
+        if (AcceptDetector.looksIdle(lines)) { acceptWatchUntil = 0; return }
         if ((panel?.inRide != true && AcceptDetector.looksAccepted(lines)) || AcceptDetector.mentionsStreet(lines, o.pickupAddress)) {
             Diag.log("Aceite visto numa leitura depois que a oferta saiu")
             logAccepted(byButton = false)
