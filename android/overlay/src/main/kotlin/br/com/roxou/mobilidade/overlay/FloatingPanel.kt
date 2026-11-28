@@ -65,27 +65,36 @@ class FloatingPanel(
         setPadding(dp(6), dp(2), dp(6), dp(2))
         background = GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(red) }
     }
-    private fun pill(label: String, bg: Int, fg: Int = Color.BLACK) = text(12f, fg, bold = true).apply {
+    // Área de toque de 44 dp, mas o desenho do botão continua pequeno (a margem invisível fica
+    // em volta da pílula), para não mudar a estética do balão (Fernando, 27/11).
+    private fun pill(label: String, bg: Int, fg: Int = Color.BLACK) = text(13f, fg, bold = true).apply {
         text = label
-        setPadding(dp(8), dp(4), dp(8), dp(4))
-        background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(bg) }
+        gravity = Gravity.CENTER
+        minHeight = dp(44)
+        setPadding(dp(12), dp(0), dp(12), dp(0))
+        background = android.graphics.drawable.InsetDrawable(
+            GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(bg) }, 0, dp(7), 0, dp(7),
+        )
     }
     /** Etapa 1: até o passageiro (ponto A). Etapa 2: do ponto A até o destino (ponto B). */
     private val pickupButton = pill("Embarque", Color.parseColor("#33CCFF"))
     private val dropoffButton = pill("Destino", Color.parseColor("#33CCFF"))
     /** Plano B do aceite automático: um toque grava a corrida no histórico. Não aceita nada na Uber/99. */
     private val acceptButton = pill("✔", green)
-    private val hideView = text(16f, Color.parseColor("#888888"), bold = true).apply {
+    /** Fechar: grande e longe do ✔, para não marcar aceite sem querer. */
+    private val hideView = text(18f, Color.parseColor("#AAAAAA"), bold = true).apply {
         text = "✕"
-        setPadding(dp(8), dp(0), dp(2), dp(0))
+        gravity = Gravity.CENTER
+        minHeight = dp(44)
+        minWidth = dp(44)
     }
     private val buttons = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         addView(pickupButton)
-        addView(dropoffButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(4) })
-        addView(acceptButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(4) })
-        addView(hideView)
+        addView(dropoffButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+        addView(acceptButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+        addView(hideView, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(18) })
     }
 
     private val root = LinearLayout(context).apply {
@@ -97,7 +106,7 @@ class FloatingPanel(
         addView(mainView)
         addView(detailView)
         addView(alertView, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(3) })
-        addView(buttons, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(5) })
+        addView(buttons, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(0) })
     }
 
     private val params = WindowManager.LayoutParams(
@@ -117,16 +126,25 @@ class FloatingPanel(
     private var logged = false
     /** Qual botão do Waze fica aceso: embarque primeiro, depois destino. */
     private var nextIsDropoff = false
+    /** Corrida aceita em andamento (continua valendo enquanto outra oferta aparece por cima). */
+    private var rideActive = false
+    private var rideOnBoard = false
 
     init {
         acceptButton.setOnClickListener { onAccepted() }
-        pickupButton.setOnClickListener { onWaze(false); nextIsDropoff = true; render() }
+        pickupButton.setOnClickListener {
+            onWaze(false)
+            nextIsDropoff = true
+            if (mode == Mode.WAZE && rideActive) rideOnBoard = true
+            render()
+        }
         dropoffButton.setOnClickListener { onWaze(true); nextIsDropoff = false; render() }
         hideView.setOnClickListener { setMode(Mode.NONE) }
         setupDrag()
     }
 
     fun showOffer(e: OfferEvaluation) {
+        if (tentative) { tentative = false; handler.removeCallbacks(endTentative) }
         val isNew = evaluation?.offer?.key != e.offer.key
         evaluation = e
         hasAddress = e.offer.pickupAddress != null || e.offer.dropoffAddress != null
@@ -147,11 +165,35 @@ class FloatingPanel(
         handler.postDelayed(hide, 1_000)
     }
 
+    private var tentative = false
+    val isTentative: Boolean get() = tentative
+    private val endTentative = Runnable { if (tentative) { tentative = false; backToRide() } }
+
+    /** A oferta saiu e o app não viu o aceite: por 15 s pergunta "Aceitou?". Só o ✔ grava a corrida (e aí vem o Waze). */
+    fun maybeAccepted() {
+        if (!hasAddress || (mode == Mode.WAZE && !rideActive)) return
+        tentative = true
+        nextIsDropoff = false
+        handler.removeCallbacks(hide)
+        handler.removeCallbacks(endTentative)
+        handler.postDelayed(endTentative, 15_000)
+        setMode(Mode.WAZE)
+    }
+
     /** A corrida foi aceita e gravada: some o ✔ e, se o motorista quiser, fica só o Waze. */
     fun markLogged() {
+        tentative = false
+        handler.removeCallbacks(endTentative)
         logged = true
         if (PanelPrefs.wazeAfterAccept(context) && hasAddress) {
             handler.removeCallbacks(hide)
+            rideActive = true
+            rideOnBoard = false
+            nextIsDropoff = false
+            // Se o app não vir o fim da viagem, o botão da corrida não fica preso para sempre.
+            val minutes = maxOf(45, (evaluation?.totalMinutes ?: 30) * 2 + 15)
+            handler.removeCallbacks(rideTimeout)
+            handler.postDelayed(rideTimeout, minutes * 60_000L)
             setMode(Mode.WAZE)
         } else {
             render()
@@ -159,18 +201,36 @@ class FloatingPanel(
     }
 
     /** Corrida aceita em andamento: a janelinha mostra o próximo passo (embarque ou destino). */
-    val inRide: Boolean get() = mode == Mode.WAZE
+    val inRide: Boolean get() = rideActive || mode == Mode.WAZE
 
     /** O passageiro entrou: o botão passa a levar ao destino. */
     fun passengerOnBoard() {
-        if (mode != Mode.WAZE || nextIsDropoff) return
-        nextIsDropoff = true
-        render()
+        if (!rideActive || rideOnBoard) return
+        rideOnBoard = true
+        if (mode == Mode.WAZE && !tentative) {
+            nextIsDropoff = true
+            render()
+        }
     }
+
+    private val rideTimeout = Runnable { rideEnded() }
 
     /** Viagem terminou: a janelinha some. */
     fun rideEnded() {
-        if (mode == Mode.WAZE) setMode(Mode.NONE)
+        rideActive = false
+        rideOnBoard = false
+        if (mode == Mode.WAZE && !tentative) setMode(Mode.NONE)
+    }
+
+    /** Oferta nova saiu da tela: volta para o botão da corrida em andamento, se houver. */
+    private fun backToRide() {
+        if (rideActive && PanelPrefs.wazeAfterAccept(context)) {
+            nextIsDropoff = rideOnBoard
+            hasAddress = true
+            setMode(Mode.WAZE)
+        } else {
+            setMode(Mode.NONE)
+        }
     }
 
     fun setDriverAppOnScreen(onScreen: Boolean) {
@@ -193,10 +253,11 @@ class FloatingPanel(
         attached = false
     }
 
-    private val hide = Runnable { if (mode == Mode.OFFER && !pinned) setMode(Mode.NONE) }
+    private val hide = Runnable { if (mode == Mode.OFFER && !pinned) backToRide() }
 
     private fun setMode(m: Mode) {
         mode = m
+        Diag.update { it.copy(panel = when (m) { Mode.NONE -> "escondida"; Mode.OFFER -> "mostrando a oferta"; Mode.WAZE -> "botão do mapa (corrida aceita)" }) }
         render()
         refreshVisibility()
     }
@@ -211,9 +272,12 @@ class FloatingPanel(
 
     private fun refreshVisibility() {
         val show = driverAppOnScreen && mode != Mode.NONE && evaluation != null
+        if (mode == Mode.OFFER && !driverAppOnScreen) Diag.update { it.copy(panel = "oferta lida, mas escondida: Uber/99 não estava na frente") }
         if (show && !attached) {
             applyPosition()
-            runCatching { wm.addView(root, params) }.onSuccess { attached = true }
+            runCatching { wm.addView(root, params) }
+                .onSuccess { attached = true }
+                .onFailure { Diag.error("janela", it) }
         } else if (!show && attached) {
             runCatching { wm.removeView(root) }
             attached = false
@@ -237,7 +301,9 @@ class FloatingPanel(
         }
         mainView.text = String.format(pt, "R$ %.2f/km", e.perKmCents / 100.0)
         val rating = e.offer.passengerRating?.let { String.format(pt, " · ★ %.2f", it) }.orEmpty()
-        detailView.text = String.format(pt, "R$ %.0f/h", e.perHourCents / 100.0) + rating
+        // R$/h já conta a busca + a viagem; o total de minutos fica à vista para conferir.
+        val approx = if (e.timeEstimated) "≈" else ""
+        detailView.text = String.format(pt, "%sR$ %.0f/h · %s%d min", approx, e.perHourCents / 100.0, approx, e.totalMinutes) + rating
 
         val blockedArea = listOf(e.pickupArea, e.dropoffArea).firstOrNull { it.blocked }
         val unknown = listOf(e.pickupArea, e.dropoffArea).firstOrNull { it.unknownCode != null }
@@ -266,7 +332,10 @@ class FloatingPanel(
         mainView.visibility = if (offerMode) View.VISIBLE else View.GONE
         detailView.visibility = if (offerMode) View.VISIBLE else View.GONE
         if (!offerMode) alertView.visibility = View.GONE
-        acceptButton.visibility = if (logged || !offerMode) View.GONE else View.VISIBLE
+        acceptButton.visibility = if (logged || !(offerMode || tentative)) View.GONE else View.VISIBLE
+        // Sem aceite visto, a janela só PERGUNTA (o botão do Waze aparecia e parecia aceite; Fernando, 27/11).
+        acceptButton.text = if (tentative) "Aceitou esta corrida? ✔ Sim" else "✔"
+        acceptButton.textSize = if (tentative) 14f else 15f
         // O próximo passo fica aceso; o outro fica apagado (mas continua funcionando).
         pickupButton.alpha = if (nextIsDropoff) 0.45f else 1f
         dropoffButton.alpha = if (nextIsDropoff) 1f else 0.45f
@@ -279,13 +348,13 @@ class FloatingPanel(
             dropoffButton.textSize = 14f
             pickupButton.alpha = 1f
             dropoffButton.alpha = 1f
-            pickupButton.visibility = if (hasAddress && !nextIsDropoff) View.VISIBLE else View.GONE
-            dropoffButton.visibility = if (hasAddress && nextIsDropoff) View.VISIBLE else View.GONE
+            pickupButton.visibility = if (hasAddress && !nextIsDropoff && !tentative) View.VISIBLE else View.GONE
+            dropoffButton.visibility = if (hasAddress && nextIsDropoff && !tentative) View.VISIBLE else View.GONE
         } else {
             pickupButton.text = "Embarque"
             dropoffButton.text = "Destino"
-            pickupButton.textSize = 12f
-            dropoffButton.textSize = 12f
+            pickupButton.textSize = 13f
+            dropoffButton.textSize = 13f
             val wazeVis = if (hasAddress) View.VISIBLE else View.GONE
             pickupButton.visibility = wazeVis
             dropoffButton.visibility = wazeVis

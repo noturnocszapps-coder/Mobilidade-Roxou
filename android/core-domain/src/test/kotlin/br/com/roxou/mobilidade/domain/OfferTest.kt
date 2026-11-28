@@ -198,11 +198,11 @@ class AcceptDetectorTest {
         assertFalse(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksAccepted(listOf(line("Você está online"))))
     }
 
-    @Test fun vira_corrida_a_confirmar() {
+    @Test fun aceite_vira_corrida_ja_confirmada() {
         val o = br.com.roxou.mobilidade.domain.offer.ParsedOffer(Platform.NINETY_NINE, 13_80, 0.363, 4, 8.1, 17)
         val t = br.com.roxou.mobilidade.domain.offer.AcceptDetector.toTrip("x", o, java.time.Instant.EPOCH, byButton = true)
         assertEquals(Platform.NINETY_NINE, t.platform)
-        assertFalse(t.confirmed)
+        assertTrue(t.confirmed) // entra sozinha na meta (pedido do Fernando, 27/11)
         assertEquals(13_80L, t.amountCents)
     }
 }

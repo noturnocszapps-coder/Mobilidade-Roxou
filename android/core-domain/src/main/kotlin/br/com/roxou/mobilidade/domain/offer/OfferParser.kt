@@ -23,6 +23,11 @@ data class ParsedOffer(
     val dropoffAddress: String? = null,
     /** Nota do passageiro (ex.: 4,88), quando aparece no cartão. */
     val passengerRating: Double? = null,
+    /**
+     * Algum tempo lido não combina com a distância (ex.: 12 km em 3 min = 240 km/h):
+     * o OCR provavelmente perdeu um dígito. O avaliador estima o tempo pela distância.
+     */
+    val timeSuspect: Boolean = false,
 ) {
     /** Chave para não mostrar a mesma oferta duas vezes. */
     val key: String get() = "$platform|$fareCents|$pickupKm|$tripKm|$tripMinutes"
@@ -71,8 +76,10 @@ object OfferParser {
         val fare = m.groupValues[1].toLong() * 100 + m.groupValues[2].toLong()
         if (fare <= 0) return null
 
-        val pickup = leg(pickupMatch)
-        val trip = leg(tripMatch)
+        var pickup = leg(pickupMatch)
+        var trip = leg(tripMatch)
+        pickup = lostDecimal(pickupMatch, pickup, fare, trip.first)
+        trip = lostDecimal(tripMatch, trip, fare, pickup.first)
 
         val pickupAddr = sorted.filter {
             it.top >= pickupLine.bottom - 10 && it.bottom <= tripLine.top + 10 && sameColumn(it, pickupLine)
@@ -92,6 +99,7 @@ object OfferParser {
             pickupAddress = joinAddress(pickupAddr),
             dropoffAddress = joinAddress(dropAddr),
             passengerRating = findRating(sorted.filter { it.top < pickupLine.top }),
+            timeSuspect = implausible(pickup.first, pickup.second) || implausible(trip.first, trip.second),
         )
     }
 
@@ -109,6 +117,37 @@ object OfferParser {
             }
             joinAddress(listOfNotNull(line, cont))
         }
+    }
+
+    /** Mais de 100 km/h na cidade, ou tempo zero com distância de verdade: leitura errada. */
+    fun implausible(km: Double, minutes: Int): Boolean =
+        (minutes <= 0 && km > 0.3) || (minutes > 0 && km / (minutes / 60.0) > 100.0)
+
+    /** Qual app mostrou a oferta, pelo texto do cartão (quando a janela não diz). */
+    fun platformHint(lines: List<OcrLine>): Platform? {
+        val t = lines.joinToString(" ") { it.text }
+        return when {
+            Regex("""(?i)\buber\s?(x|black|comfort|business|flash|moto|bag|exclusivo|adolescente|teens?|planet|juntos)\b|\buberx\b|\bbusiness\s+comfort\b""").containsMatchIn(t) -> Platform.UBER
+            // Jeito de escrever da Uber: "5 minutos (1.6 km)", com ponto. A 99 escreve "17 min (8,1 km)".
+            !Regex("""(?i)taxa99|\b99\s?(pop|comfort)""").containsMatchIn(t) &&
+                Regex("""(?i)\d\s*minutos\s*\(|\(\s*\d+\.\d+\s*km\s*\)""").containsMatchIn(t) -> Platform.UBER
+            Regex("""(?i)\b99\s?(pop|top|comfort|moto|entrega)\b|taxa99|\bnegocia\b""").containsMatchIn(t) -> Platform.NINETY_NINE
+            else -> null
+        }
+    }
+
+    /**
+     * O OCR às vezes perde o ponto da Uber ("4 min (1.5 km)" vira "15 km"). Só corrige quando a leitura
+     * é impossível (mais de 100 km/h), fica normal com o ponto de volta, e o valor por km ficaria abaixo
+     * de R$ 1,00, o que quase nunca acontece. Se não, o tempo é que foi mal lido e vira estimativa.
+     */
+    private fun lostDecimal(m: MatchResult, leg: Pair<Double, Int>, fare: Long, otherKm: Double): Pair<Double, Int> {
+        val raw = m.groupValues[3]
+        val (km, minutes) = leg
+        val digitsOnly = raw.length >= 2 && raw.all { it.isDigit() } && m.groupValues[4].equals("km", ignoreCase = true)
+        if (!digitsOnly || !implausible(km, minutes) || implausible(km / 10.0, minutes)) return leg
+        val perKm = fare / (km + otherKm).coerceAtLeast(0.1)
+        return if (perKm < 100.0) (km / 10.0) to minutes else leg
     }
 
     private fun sameColumn(a: OcrLine, ref: OcrLine) = a.left >= ref.left - 60 && a.left <= ref.left + 120

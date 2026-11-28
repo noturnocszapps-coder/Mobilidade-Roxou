@@ -34,7 +34,8 @@ import java.time.LocalDate
 data class AppSettings(
     val turnover: TurnoverConfig = TurnoverConfig(),
     val goals: DailyGoalPlan = DailyGoalPlan.DEFAULT,
-    val goalPlatforms: Set<Platform> = setOf(Platform.UBER),
+    /** Meta diária: Uber e 99. (A meta da locadora usa só rental.tierPlatforms, que é a Uber.) */
+    val goalPlatforms: Set<Platform> = setOf(Platform.UBER, Platform.NINETY_NINE),
     val carryShortfall: Boolean = false,
     val ownership: VehicleOwnership = VehicleOwnership.RENTED,
     val rental: RentalPlan = RentalPlan.LOCALIZA_ZARP,

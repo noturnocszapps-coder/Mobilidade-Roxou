@@ -26,6 +26,7 @@ import br.com.roxou.mobilidade.domain.offer.OfferEvaluator
 import br.com.roxou.mobilidade.domain.offer.OfferOutcome
 import br.com.roxou.mobilidade.domain.offer.OfferRecord
 import br.com.roxou.mobilidade.domain.offer.OfferParser
+import br.com.roxou.mobilidade.domain.offer.ParsedOffer
 import br.com.roxou.mobilidade.domain.offer.TierContext
 import br.com.roxou.mobilidade.domain.rental.VehicleOwnership
 import com.google.mlkit.vision.common.InputImage
@@ -66,7 +67,7 @@ class OfferReaderService : AccessibilityService() {
     private var pickupAddress: String? = null
     private var dropoffAddress: String? = null
     private var addressesAt = 0L
-    private var lastOffer: br.com.roxou.mobilidade.domain.offer.ParsedOffer? = null
+    private var lastOffer: ParsedOffer? = null
     private var lastOfferShownAt = 0L
     private val loggedKeys = mutableSetOf<String>()
     /** Oferta atual, para o histórico de todas as ofertas (aceitas e recusadas). */
@@ -75,8 +76,18 @@ class OfferReaderService : AccessibilityService() {
     private var lastOfferAt: java.time.Instant? = null
     private var lastRecordedId = ""
 
+    /** Sessão da oferta na tela: quantas leituras, qual oferta foi lida e quando. */
+    private var readKey: String? = null
+    private var readAt = 0L
+    private var rereads = 0
+    private var offerByScan = false
+    private var lastScan = 0L
+    private var lastDriverWindowChange = 0L
+    private var activeApp = ""
+
     override fun onServiceConnected() {
         super.onServiceConnected()
+        Diag.init(this)
         repo = RoxouRepository.get(this)
         licencas = LicencaStore.get(this)
         scope.launch { RoxouApi(licencas).renovarSePreciso() }
@@ -84,10 +95,22 @@ class OfferReaderService : AccessibilityService() {
         instance = this
         panel = FloatingPanel(this, ::openWaze) { logAccepted(byButton = true) }
         scope.launch { repo.state.collect { state = it } }
+        Diag.update { it.copy(serviceConnectedAt = System.currentTimeMillis(), serviceAlive = true) }
+        Diag.log("Serviço de leitura conectado")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val pkg = event?.packageName?.toString() ?: return
+        // Um erro aqui não pode derrubar o serviço: o Android desliga a acessibilidade de app que cai.
+        try {
+            handleEvent(event ?: return)
+        } catch (t: Throwable) {
+            shotPending = false
+            Diag.error("evento", t)
+        }
+    }
+
+    private fun handleEvent(event: AccessibilityEvent) {
+        val pkg = event.packageName?.toString() ?: return
         if (!Radar.isOn(this)) {
             panel?.setDriverAppOnScreen(false)
             return
@@ -98,67 +121,164 @@ class OfferReaderService : AccessibilityService() {
             if (pkg in DRIVER_APPS) avisarPro()
             return
         }
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg !in IGNORED && pkg != packageName) {
+        val type = event.eventType
+        // Toque no botão "Aceitar" da Uber/99 (quando o app entrega esse evento): registra o aceite na hora.
+        if (type == AccessibilityEvent.TYPE_VIEW_CLICKED && pkg in DRIVER_APPS) {
+            val t = (event.text.joinToString(" ") + " " + (event.contentDescription ?: "")).lowercase()
+            if (("aceitar" in t || "accept" in t) && lastOffer != null && SystemClock.uptimeMillis() - lastOfferShownAt < 60_000) {
+                Diag.log("Toque em Aceitar visto pela acessibilidade")
+                logAccepted(byButton = false)
+            }
+            return
+        }
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg !in IGNORED && pkg != packageName) {
             panel?.setDriverAppOnScreen(pkg in DRIVER_APPS)
         }
-        if (pkg !in DRIVER_APPS) return
+        // TYPE_WINDOWS_CHANGED não traz pacote confiável: a oferta da Uber por cima da 99 (ou do Waze)
+        // chega assim. Então qualquer mudança de janelas também dispara a procura.
+        val windowsChanged = type == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        if (pkg !in DRIVER_APPS && !windowsChanged) return
         val now = SystemClock.uptimeMillis()
-        if (now - lastCheck < 300) return
+        if (pkg in DRIVER_APPS) {
+            if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) lastDriverWindowChange = now
+            Diag.update { it.copy(lastEventAt = System.currentTimeMillis(), lastEventApp = appName(pkg), eventsCount = it.eventsCount + 1) }
+        } else {
+            lastDriverWindowChange = now
+        }
+        if (now - lastCheck < 250) return
         lastCheck = now
         checkForOffer(now)
         checkRideStage(now)
     }
 
+    private fun appName(pkg: String) = when (pkg) {
+        UBER -> "Uber"
+        NINETY_NINE -> "99"
+        else -> pkg
+    }
+
     private fun checkForOffer(now: Long) {
-        // A oferta pode vir numa janela por cima (a da 99 é assim), então procura em todas as janelas
-        // visíveis. Janela que não está na tela (ex.: o Roxou na frente) não entra nesta lista.
+        // A oferta pode vir numa janela por cima (a da Uber aparece por cima da 99 e do Waze),
+        // então procura em todas as janelas visíveis, não só na janela ativa.
         val roots = runCatching { windows.mapNotNull { it.root } }.getOrDefault(emptyList())
             .ifEmpty { listOfNotNull(rootInActiveWindow) }
         val driverRoots = roots.filter { (it.packageName?.toString() ?: "") in DRIVER_APPS }
-        if (driverRoots.isEmpty()) return
+        if (driverRoots.isEmpty()) {
+            if (offerVisible && now - lastOfferSeen > 2_000) endOffer("app de motorista saiu da tela")
+            return
+        }
         panel?.setDriverAppOnScreen(true)
 
-        var card: android.view.accessibility.AccessibilityNodeInfo? = null
-        var active = ""
+        var found = ""
         for (r in driverRoots) {
             val pkg = r.packageName.toString()
-            val found = r.findAccessibilityNodeInfosByViewId(TRIGGERS.getValue(pkg)).firstOrNull()
-            if (found != null) { card = found; active = pkg; break }
+            val hit = TRIGGERS.getValue(pkg).any { id -> r.findAccessibilityNodeInfosByViewId("$pkg:id/$id").isNotEmpty() }
+            if (hit) { found = pkg; break }
         }
-        if (card == null) {
-            if (offerVisible && now - lastOfferSeen > 2_500) {
-                offerVisible = false
-                panel?.offerGone()
-                checkAcceptedSoon()
+
+        if (found.isEmpty()) {
+            if (offerVisible && !offerByScan && now - lastOfferSeen > 2_000) endOffer("cartão sumiu")
+            // Plano B: cartão sem o ID conhecido (variantes novas da Uber/99). Lê a tela de tempos em
+            // tempos enquanto o app de motorista está na frente; logo depois de uma janela nova, mais rápido.
+            val interval = if (now - lastDriverWindowChange < 4_000) 1_500L else 4_000L
+            // Só com o app de motorista ocupando a tela (a bolhinha da Uber por cima de outro app não conta).
+            val screenH = resources.displayMetrics.heightPixels
+            val big = driverRoots.firstOrNull { r -> Rect().also { r.getBoundsInScreen(it) }.height() > screenH / 4 }
+            // Continua lendo durante a corrida: a 99/Uber mostram ofertas novas por cima da corrida atual.
+            if (big != null && !shotPending && now - lastScan > interval) {
+                lastScan = now
+                shoot(0, big.packageName.toString(), byScan = true)
             }
             return
         }
-        val cardNode = card
-        if (!offerVisible) {
-            offerVisible = true
-            triesThisOffer = 0
+
+        if (!offerVisible || activeApp != found) {
+            startOffer(found, "ID do cartão")
         }
         lastOfferSeen = now
-        if (triesThisOffer >= 4 || shotPending) return
+        if (shotPending) return
+        when {
+            // Ainda não leu: tenta até 8 vezes (o cartão anima ao entrar).
+            readKey == null && triesThisOffer < 8 -> shoot(if (triesThisOffer == 0) 400L else 1_100L, found, byScan = false)
+            readKey == null && triesThisOffer == 8 -> { triesThisOffer++; Diag.discard("${appName(found)}: cartão na tela, mas 8 leituras sem achar valor e os dois tempos") }
+            // Já leu: confere a cada 3 s se a oferta mudou (a próxima pode vir sem o cartão sumir).
+            readKey != null && now - readAt > 3_000 && rereads < 10 -> { rereads++; shoot(0, found, byScan = false) }
+        }
+    }
 
-        // Na Uber o cartão tem limites conhecidos; na 99 a tela inteira é lida.
-        val crop = if (active == UBER) Rect().also { cardNode.getBoundsInScreen(it) } else null
-        val platform = if (active == UBER) Platform.UBER else Platform.NINETY_NINE
-        // Espera o cartão terminar de animar (o primeiro print da Uber saía vazio).
-        val delay = if (triesThisOffer == 0) 700L else 1_800L
+    private fun startOffer(pkg: String, how: String) {
+        offerVisible = true
+        offerByScan = how == "leitura da tela"
+        activeApp = pkg
+        triesThisOffer = 0
+        rereads = 0
+        readKey = null
+        Diag.update { it.copy(lastOfferSeenAt = System.currentTimeMillis(), lastOfferApp = appName(pkg), lastOfferHow = how) }
+        Diag.log("Cartão de oferta na tela: ${appName(pkg)} ($how)")
+    }
+
+    /** Depois que a oferta sai, toda leitura da tela por 60 s também procura sinais de aceite. */
+    private var acceptWatchUntil = 0L
+
+    private fun endOffer(why: String) {
+        acceptWatchUntil = SystemClock.uptimeMillis() + 60_000
+        offerVisible = false
+        offerByScan = false
+        readKey = null
+        panel?.offerGone()
+        Diag.update { it.copy(panel = "oferta saiu ($why)") }
+        Diag.log("Oferta saiu da tela: $why")
+        checkAcceptedSoon()
+    }
+
+    private fun shoot(delay: Long, pkg: String, byScan: Boolean) {
         shotPending = true
         handler.postDelayed({
-            triesThisOffer++
-            screenshotText(crop) { lines ->
+            if (!byScan) triesThisOffer++
+            // Tela inteira: o recorte pelo cartão cortava o valor em variantes da Uber
+            // (Exclusivo, Adolescente) e saía vazio enquanto o cartão animava.
+            screenshotText(null) { lines ->
                 shotPending = false
-                if (lines != null) handleOffer(lines, platform)
+                try {
+                    onScreenText(lines, pkg, byScan)
+                } catch (t: Throwable) {
+                    Diag.error("leitura", t)
+                }
             }
         }, delay)
     }
 
-    private fun handleOffer(lines: List<OcrLine>, platform: Platform) {
-        val offer = OfferParser.parse(lines, platform) ?: return
-        triesThisOffer = 99 // já leu esta oferta
+    private fun onScreenText(lines: List<OcrLine>?, pkg: String, byScan: Boolean) {
+        if (lines == null) {
+            if (!byScan) Diag.discard("${appName(pkg)}: o Android não entregou o print da tela")
+            return
+        }
+        val platform = OfferParser.platformHint(lines) ?: if (pkg == UBER) Platform.UBER else Platform.NINETY_NINE
+        val offer = OfferParser.parse(lines, platform)
+        if (offer == null) {
+            if (byScan) {
+                if (offerVisible && offerByScan) endOffer("leitura não achou mais a oferta")
+                else {
+                    watchAccept(lines)
+                    if (panel?.inRide == true) applyRideStage(lines)
+                }
+            } else {
+                val legs = lines.count { Regex("""\d+\s*min""").containsMatchIn(it.text) && it.text.contains("(") }
+                val money = lines.count { it.text.contains("R$") }
+                Diag.discard("${appName(pkg)}: leitura ${triesThisOffer}: $legs linha(s) de tempo, $money de valor (precisa 2 de tempo e 1 de valor)")
+                Diag.log("Linhas: " + lines.sortedBy { it.top }.joinToString(" | ") { Diag.mask(it.text) }.take(900))
+            }
+            return
+        }
+        if (byScan && !offerVisible) startOffer(if (platform == Platform.UBER) UBER else NINETY_NINE, "leitura da tela")
+        if (byScan) lastOfferSeen = SystemClock.uptimeMillis()
+        val changed = offer.key != readKey
+        readKey = offer.key
+        readAt = SystemClock.uptimeMillis()
+        if (changed) handleOffer(offer)
+    }
+
+    private fun handleOffer(offer: ParsedOffer) {
         val s = state
         val todas = s?.settings?.offer ?: br.com.roxou.mobilidade.domain.offer.OfferRules()
         // Filtro de bairros é do plano Pro.
@@ -182,6 +302,20 @@ class OfferReaderService : AccessibilityService() {
         lastOfferShownAt = SystemClock.uptimeMillis()
         if (offer.key in loggedKeys) panel?.markLogged()
 
+        val app = if (offer.platform == Platform.UBER) "Uber" else "99"
+        val parse = String.format(
+            java.util.Locale.ROOT, "%s R$ %.2f · busca %d min %.1f km · viagem %d min %.1f km · nota %s%s",
+            app, offer.fareCents / 100.0, offer.pickupMinutes, offer.pickupKm, offer.tripMinutes, offer.tripKm,
+            offer.passengerRating?.toString() ?: "-", if (offer.timeSuspect) " · TEMPO DUVIDOSO" else "",
+        )
+        val result = String.format(
+            java.util.Locale.ROOT, "%s · R$ %.2f/km · R$ %.2f/h · %d min no total%s",
+            e.verdict.name, e.perKmCents / 100.0, e.perHourCents / 100.0, e.totalMinutes, if (e.timeEstimated) " (tempo estimado)" else "",
+        )
+        Diag.update { it.copy(lastParse = parse, lastResult = result, offersRead = it.offersRead + 1, panel = "mostrando a oferta") }
+        Diag.log("LIDA: $parse")
+        Diag.log("CÁLCULO: $result")
+
         listOfNotNull(e.pickupArea.unknownCode, e.dropoffArea.unknownCode).forEach { code ->
             scope.launch { repo.updateSettings { it.copy(offer = AreaFilter.learnCode(it.offer, code)) } }
         }
@@ -198,13 +332,33 @@ class OfferReaderService : AccessibilityService() {
         handler.postDelayed({
             if (offer.key != lastOffer?.key || offer.key in loggedKeys) return@postDelayed
             screenshotText(null) { lines ->
+                val accepted = lines != null && (
+                    AcceptDetector.looksAccepted(lines) ||
+                        // A navegação da 99 até o passageiro mostra a rua do embarque desta oferta.
+                        AcceptDetector.mentionsStreet(lines, offer.pickupAddress)
+                    )
                 when {
-                    lines != null && AcceptDetector.looksAccepted(lines) -> logAccepted(byButton = false)
-                    attempt == 0 -> checkAcceptedSoon(1)
-                    else -> record(OfferOutcome.REJECTED)
+                    accepted -> logAccepted(byButton = false)
+                    attempt < 3 -> checkAcceptedSoon(attempt + 1)
+                    else -> {
+                        Diag.log("Aceite não detectado depois que a oferta saiu (4 leituras)")
+                        record(OfferOutcome.REJECTED)
+                        // Pode ter aceitado numa tela que o app não conhece: deixa Embarque/Destino e o ✔
+                        // por alguns segundos. Tocar em um deles conta como aceite.
+                        panel?.maybeAccepted()
+                    }
                 }
             }
-        }, if (attempt == 0) 1_500 else 2_500)
+        }, when (attempt) { 0 -> 1_200L; 1 -> 2_000L; 2 -> 3_000L; else -> 5_000L })
+    }
+
+    private fun watchAccept(lines: List<OcrLine>) {
+        val o = lastOffer ?: return
+        if (SystemClock.uptimeMillis() > acceptWatchUntil || o.key in loggedKeys) return
+        if (AcceptDetector.looksAccepted(lines) || AcceptDetector.mentionsStreet(lines, o.pickupAddress)) {
+            Diag.log("Aceite visto numa leitura depois que a oferta saiu")
+            logAccepted(byButton = false)
+        }
     }
 
     private fun record(outcome: OfferOutcome) {
@@ -228,7 +382,7 @@ class OfferReaderService : AccessibilityService() {
         if (PanelPrefs.rideNotification(this) && (offer.pickupAddress != null || offer.dropoffAddress != null)) {
             RideNotification.show(this, listOfNotNull(offer.pickupAddress, offer.dropoffAddress).joinToString(" → "))
         }
-        toast(if (byButton) "Corrida registrada (a confirmar)" else "Aceite detectado: corrida registrada (a confirmar)")
+        toast("Corrida aceita registrada")
     }
 
     private var lastStageCheck = 0L
@@ -244,10 +398,26 @@ class OfferReaderService : AccessibilityService() {
         shotPending = true
         screenshotText(null) { lines ->
             shotPending = false
-            if (lines == null) return@screenshotText
+            // A mesma leitura também procura oferta nova por cima da corrida (antes ela só via a etapa
+            // da viagem e a oferta sobreposta podia passar sem avaliação).
+            if (lines != null) {
+                try {
+                    onScreenText(lines, activeApp.ifEmpty { UBER }, byScan = true)
+                } catch (t: Throwable) {
+                    Diag.error("leitura", t)
+                }
+            }
+        }
+    }
+
+    private fun applyRideStage(lines: List<OcrLine>) {
+        val p = panel ?: return
+        run {
             when {
-                AcceptDetector.looksEnded(lines) -> p.rideEnded()
+                AcceptDetector.looksEnded(lines) -> { p.rideEnded(); RideNotification.hide(this) }
                 AcceptDetector.looksOnTrip(lines) -> p.passengerOnBoard()
+                // Navegação mostrando a rua do destino (e não mais a do embarque): passageiro a bordo.
+                AcceptDetector.mentionsStreet(lines, acceptedDropoff) && !AcceptDetector.mentionsStreet(lines, acceptedPickup) -> p.passengerOnBoard()
             }
         }
     }
@@ -262,6 +432,16 @@ class OfferReaderService : AccessibilityService() {
     }
 
     private fun openWaze(toDropoff: Boolean) {
+        val o = lastOffer
+        if (o != null && o.key !in loggedKeys && panel?.isTentative == true) {
+            logAccepted(byButton = true) // tocou em Embarque/Destino depois que a oferta saiu: aceitou
+        }
+        // Botão da corrida em andamento: usa os endereços da corrida aceita, não os da última oferta vista.
+        val acc = if (toDropoff) acceptedDropoff else acceptedPickup
+        if (panel?.inRide == true && !offerVisible && acc != null) {
+            go(acc)
+            return
+        }
         val fresh = SystemClock.uptimeMillis() - addressesAt < 60 * 60_000
         val remembered = if (!fresh) null else if (toDropoff) dropoffAddress else pickupAddress
         if (remembered != null) {
@@ -345,7 +525,14 @@ class OfferReaderService : AccessibilityService() {
 
     override fun onInterrupt() = Unit
 
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        Diag.update { it.copy(serviceAlive = false) }
+        Diag.log("Serviço de leitura desligado pelo Android ou pelo usuário")
+        return super.onUnbind(intent)
+    }
+
     override fun onDestroy() {
+        Diag.update { it.copy(serviceAlive = false) }
         if (instance === this) instance = null
         handler.removeCallbacksAndMessages(null)
         panel?.destroy()
@@ -371,7 +558,11 @@ class OfferReaderService : AccessibilityService() {
         const val UBER = "com.ubercab.driver"
         const val NINETY_NINE = "com.app99.driver"
         val DRIVER_APPS = setOf(UBER, NINETY_NINE)
-        private val TRIGGERS = mapOf(UBER to "$UBER:id/primary_touch_area", NINETY_NINE to "$NINETY_NINE:id/broad_order_container")
+        /** IDs do cartão de oferta vistos na Etapa 1. Variante sem eles cai na leitura da tela (plano B). */
+        private val TRIGGERS = mapOf(
+            UBER to listOf("primary_touch_area", "ub_driver_offers_browse_pill_container"),
+            NINETY_NINE to listOf("broad_order_container"),
+        )
         /** Janelas que aparecem por cima sem tirar o app de motorista da frente. */
         private val IGNORED = setOf("com.android.systemui", "com.samsung.android.honeyboard", "com.google.android.inputmethod.latin")
     }

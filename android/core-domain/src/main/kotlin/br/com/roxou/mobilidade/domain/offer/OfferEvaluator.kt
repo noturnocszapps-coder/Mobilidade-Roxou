@@ -46,6 +46,8 @@ data class OfferEvaluation(
     val dropoffArea: AreaMatch,
     /** Nota do passageiro abaixo do mínimo configurado. */
     val lowRating: Boolean = false,
+    /** O tempo de algum trecho foi estimado pela distância (o tempo lido não fazia sentido). */
+    val timeEstimated: Boolean = false,
 ) {
     val blocked: Boolean get() = pickupArea.blocked || dropoffArea.blocked
 }
@@ -58,7 +60,14 @@ object OfferEvaluator {
 
     fun evaluate(offer: ParsedOffer, rules: OfferRules, tier: TierContext? = null): OfferEvaluation {
         val totalKm = offer.pickupKm + offer.tripKm
-        val totalMin = (offer.pickupMinutes + offer.tripMinutes).coerceAtLeast(1)
+        // R$/h sempre com o deslocamento até o passageiro + a viagem. Tempo lido sem sentido
+        // (ex.: 12 km em 3 min) é trocado por uma estimativa a 30 km/h, e a janela mostra "≈".
+        fun legMinutes(km: Double, min: Int) =
+            if (OfferParser.implausible(km, min)) (km / 30.0 * 60.0).roundToLong().toInt().coerceAtLeast(1) else min
+        val pickupMin = legMinutes(offer.pickupKm, offer.pickupMinutes)
+        val tripMin = legMinutes(offer.tripKm, offer.tripMinutes)
+        val timeEstimated = pickupMin != offer.pickupMinutes || tripMin != offer.tripMinutes
+        val totalMin = (pickupMin + tripMin).coerceAtLeast(1)
         val perKm = if (totalKm > 0.05) (offer.fareCents / totalKm).roundToLong() else offer.fareCents
         val perHour = (offer.fareCents * 60.0 / totalMin).roundToLong()
         val net = offer.fareCents - (totalKm * rules.costPerKmCents).roundToLong()
@@ -114,7 +123,7 @@ object OfferEvaluator {
             1 -> Verdict.BORDERLINE
             else -> Verdict.BAD
         }
-        return OfferEvaluation(offer, verdict, totalKm, totalMin, perKm, perHour, net, reason, pickupArea, dropoffArea, lowRating)
+        return OfferEvaluation(offer, verdict, totalKm, totalMin, perKm, perHour, net, reason, pickupArea, dropoffArea, lowRating, timeEstimated)
     }
 
     fun money(c: Cents): String = String.format(pt, "R$ %.2f", c / 100.0)
