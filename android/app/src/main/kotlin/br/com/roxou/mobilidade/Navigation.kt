@@ -204,12 +204,14 @@ fun RoxouNavHost(repo: RoxouRepository) {
                                 .map { r ->
                                     CorridaItem(
                                         id = "recusada:${r.id}",
-                                        app = "Recusada",
+                                        app = if (r.platform == Platform.UBER) "Uber" else "99",
+                                        status = "Recusada",
+                                        valorPorKmCentavos = r.perKmCents,
                                         hora = horaFmt.format(r.at.atZone(BRASILIA)),
                                         valorCentavos = r.fareCents,
                                         km = r.totalKm,
                                         confirmada = true,
-                                        origem = (if (r.platform == Platform.UBER) "Uber" else "99") + " · não aceita",
+                                        origem = "Não aceita",
                                     )
                                 }
                         }

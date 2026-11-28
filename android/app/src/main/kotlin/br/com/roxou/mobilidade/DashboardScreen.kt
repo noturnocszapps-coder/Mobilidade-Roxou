@@ -82,6 +82,15 @@ fun DashboardScreen(repo: RoxouRepository, recursos: Recursos) {
     var tela by remember { mutableStateOf<String?>(null) }
     var resumo by remember { mutableStateOf<OfferStats?>(null) }
     BackHandler(enabled = tela != null) { tela = null }
+    // Estado do Radar em palavras simples, para o cartão do Início (visual do AI Studio).
+    val context = LocalContext.current
+    val radarOn by Radar.flow(context).collectAsStateWithLifecycle()
+    val diagState by Diag.state.collectAsStateWithLifecycle()
+    val radarEstado = when {
+        radarOn == false -> "Desligado"
+        !Diag.accessibilityEnabled(context) || !diagState.serviceAlive -> "Falta permissão"
+        else -> "Lendo ofertas"
+    }
     RoxouDesignTheme {
         when (tela) {
             "financas" -> FinancasRoute(repo, st) { tela = null }
@@ -99,6 +108,11 @@ fun DashboardScreen(repo: RoxouRepository, recursos: Recursos) {
                     s.toPainelUi(recursos),
                     Modifier.weight(1f),
                     onAbrirFinancas = { if (recursos.financas) tela = "financas" },
+                    radarEstado = radarEstado,
+                    onArrumarRadar = {
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    },
+                    onAbrirDiagnostico = { tela = "diag" },
                 )
             }
         }
