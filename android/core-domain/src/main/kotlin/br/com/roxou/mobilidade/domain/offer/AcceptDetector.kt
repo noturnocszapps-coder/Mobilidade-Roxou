@@ -24,6 +24,8 @@ object AcceptDetector {
         "finalizar viagem", "finalizar corrida", "encerrar viagem", "encerrar corrida", "concluir viagem",
         "concluir corrida", "deixar passageiro", "deixe o passageiro", "a caminho do destino", "rumo ao destino",
         "deslize para finalizar", "deslize para encerrar", "passageiro a bordo",
+        // Uber com o passageiro a bordo (print de 27/11): "5 min · 2,3 km · Destino de Maria".
+        "destino de ",
     )
     /** Viagem terminou: tela de avaliação ou de ganhos da corrida. */
     private val endedWords = listOf("avalie o passageiro", "avaliar passageiro", "como foi a viagem", "viagem concluida", "corrida finalizada", "voce ganhou")

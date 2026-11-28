@@ -168,4 +168,11 @@ class RadarAuditTest {
         assertEquals(11, o.pickupMinutes + o.tripMinutes)
         assertTrue(o.dropoffAddress!!.startsWith("Rua Ricardo Anderson Cristófano, 385"))
     }
+
+    /** Print do Fernando (27/11): Uber com a passageira a bordo mostra "Destino de <nome>". */
+    @Test fun uber_destino_de_passageiro_e_viagem_em_andamento() {
+        val lines = listOf(l("Navegar", 1750), l("5 min", 2000), l("2,3 km", 2000, left = 600), l("Destino de Maria", 2080))
+        assertTrue(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksOnTrip(lines))
+        assertFalse(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksOnTrip(listOf(l("Embarque de Maria", 2080))))
+    }
 }
