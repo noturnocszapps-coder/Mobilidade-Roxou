@@ -71,10 +71,11 @@ class FloatingPanel(
         text = label
         gravity = Gravity.CENTER
         minHeight = dp(44)
-        setPadding(dp(12), dp(0), dp(12), dp(0))
         background = android.graphics.drawable.InsetDrawable(
             GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(bg) }, 0, dp(7), 0, dp(7),
         )
+        // O padding vem DEPOIS do fundo: trocar o fundo zera o padding (o texto encostava nas bordas).
+        setPadding(dp(12), dp(7), dp(12), dp(7))
     }
     /** Etapa 1: até o passageiro (ponto A). Etapa 2: do ponto A até o destino (ponto B). */
     private val pickupButton = pill("Embarque", Color.parseColor("#33CCFF"))
