@@ -175,4 +175,22 @@ class RadarAuditTest {
         assertTrue(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksOnTrip(lines))
         assertFalse(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksOnTrip(listOf(l("Embarque de Maria", 2080))))
     }
+
+    /** Print do Fernando (27/11): Comfort Exclusivo R$ 29,03, embarque só com a cidade, 0.1 km. */
+    @Test fun uber_exclusivo_embarque_so_com_cidade() {
+        val lines = listOf(
+            l("Presidente", 180, left = 460), l("Prudente", 240, left = 470), l("270", 340, left = 270),
+            l("Comfort", 1060, left = 165), l("Exclusivo", 1060, left = 455), l("R$ 29,03", 1170, left = 96, h = 110),
+            l("4,91 (389)", 1330, left = 190), l("Verificado", 1330, left = 560),
+            l("1 min (0.1 km)", 1480), l("Presidente Prudente", 1550), l("14 minutos (9.3 km)", 1620),
+            l("Rua Ribeiro de Barros, 860,", 1690), l("Presidente Prudente, Presidente", 1750), l("Prudente", 1810),
+            l("Aceitar", 2000, left = 450),
+        )
+        assertEquals(Platform.UBER, OfferParser.platformHint(lines))
+        val o = OfferParser.parse(lines, Platform.UBER)!!
+        assertEquals(29_03L, o.fareCents)
+        assertEquals(9.4, o.pickupKm + o.tripKm, 1e-9)
+        assertEquals(15, o.pickupMinutes + o.tripMinutes)
+        assertEquals(4.91, o.passengerRating!!, 1e-9)
+    }
 }
