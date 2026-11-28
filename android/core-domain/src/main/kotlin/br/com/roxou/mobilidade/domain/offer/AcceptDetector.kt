@@ -16,6 +16,8 @@ object AcceptDetector {
         "passageiro aguardando", "embarque em", "pegar ", "deslize para iniciar",
         // 99 (navegação própria até o embarque, visto em 27/11): "Chegue antes de 19:48".
         "chegue antes de", "a caminho do embarque", "local de embarque", "passageiro te espera",
+        // Uber indo buscar (par do "Destino de <nome>" visto em 27/11).
+        "embarque de ", "buscar ", "a caminho de ",
     )
     // "Buscando" sozinho é a tela de espera da 99 (print de 28/11, com "Solicitações (4)").
     private val stillLooking = listOf("procurando", "buscando", "voce esta online", "ficar offline")

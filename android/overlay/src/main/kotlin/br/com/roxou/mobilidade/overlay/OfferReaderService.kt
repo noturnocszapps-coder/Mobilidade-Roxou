@@ -306,6 +306,18 @@ class OfferReaderService : AccessibilityService() {
             }
             return
         }
+        // Releitura da MESMA oferta (mesmo app e mesmo valor) não troca uma leitura boa por uma pior:
+        // no registro de 28/11, "10 min" virou "910 min" (R$ 0,80/h) e a viagem virou cópia da busca (R$ 300/h).
+        val prev = lastOffer
+        if (offerVisible && readKey != null && prev != null && prev.platform == offer.platform && prev.fareCents == offer.fareCents &&
+            SystemClock.uptimeMillis() - lastOfferShownAt < 60_000 && !(prev.timeSuspect && !offer.timeSuspect)
+        ) {
+            if (offer.key != prev.key) Diag.log("Releitura da mesma oferta ignorada (mantida a 1ª leitura)")
+            readKey = prev.key
+            readAt = SystemClock.uptimeMillis()
+            if (byScan) lastOfferSeen = SystemClock.uptimeMillis()
+            return
+        }
         if (byScan && !offerVisible) startOffer(if (platform == Platform.UBER) UBER else NINETY_NINE, "leitura da tela")
         if (byScan) lastOfferSeen = SystemClock.uptimeMillis()
         val changed = offer.key != readKey
