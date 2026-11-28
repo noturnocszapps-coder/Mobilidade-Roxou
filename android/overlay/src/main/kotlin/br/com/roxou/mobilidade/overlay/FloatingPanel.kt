@@ -65,9 +65,13 @@ class FloatingPanel(
         setPadding(dp(6), dp(2), dp(6), dp(2))
         background = GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(red) }
     }
-    private fun pill(label: String, bg: Int, fg: Int = Color.BLACK) = text(12f, fg, bold = true).apply {
+    // Botões grandes o bastante para o dedo com o carro parado (Fernando, 27/11): pelo menos 44 dp de altura.
+    private fun pill(label: String, bg: Int, fg: Int = Color.BLACK) = text(14f, fg, bold = true).apply {
         text = label
-        setPadding(dp(8), dp(4), dp(8), dp(4))
+        gravity = Gravity.CENTER
+        minHeight = dp(44)
+        minWidth = dp(48)
+        setPadding(dp(14), dp(8), dp(14), dp(8))
         background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(bg) }
     }
     /** Etapa 1: até o passageiro (ponto A). Etapa 2: do ponto A até o destino (ponto B). */
@@ -75,17 +79,21 @@ class FloatingPanel(
     private val dropoffButton = pill("Destino", Color.parseColor("#33CCFF"))
     /** Plano B do aceite automático: um toque grava a corrida no histórico. Não aceita nada na Uber/99. */
     private val acceptButton = pill("✔", green)
-    private val hideView = text(16f, Color.parseColor("#888888"), bold = true).apply {
+    /** Fechar: grande e longe do ✔, para não marcar aceite sem querer. */
+    private val hideView = text(20f, Color.WHITE, bold = true).apply {
         text = "✕"
-        setPadding(dp(8), dp(0), dp(2), dp(0))
+        gravity = Gravity.CENTER
+        minHeight = dp(44)
+        minWidth = dp(52)
+        background = GradientDrawable().apply { cornerRadius = dp(22).toFloat(); setColor(Color.parseColor("#55555A")) }
     }
     private val buttons = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         addView(pickupButton)
-        addView(dropoffButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(4) })
-        addView(acceptButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(4) })
-        addView(hideView)
+        addView(dropoffButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
+        addView(acceptButton, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
+        addView(hideView, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(28) })
     }
 
     private val root = LinearLayout(context).apply {
@@ -326,7 +334,7 @@ class FloatingPanel(
         acceptButton.visibility = if (logged || !(offerMode || tentative)) View.GONE else View.VISIBLE
         // Sem aceite visto, a janela só PERGUNTA (o botão do Waze aparecia e parecia aceite; Fernando, 27/11).
         acceptButton.text = if (tentative) "Aceitou esta corrida? ✔ Sim" else "✔"
-        acceptButton.textSize = if (tentative) 14f else 12f
+        acceptButton.textSize = if (tentative) 15f else 16f
         // O próximo passo fica aceso; o outro fica apagado (mas continua funcionando).
         pickupButton.alpha = if (nextIsDropoff) 0.45f else 1f
         dropoffButton.alpha = if (nextIsDropoff) 1f else 0.45f
@@ -335,8 +343,8 @@ class FloatingPanel(
             // Corrida aceita: só o botão do passo atual, grande o bastante para tocar com o carro parado.
             pickupButton.text = "➜ Ir ao embarque · $map"
             dropoffButton.text = "➜ Ir ao destino · $map"
-            pickupButton.textSize = 14f
-            dropoffButton.textSize = 14f
+            pickupButton.textSize = 16f
+            dropoffButton.textSize = 16f
             pickupButton.alpha = 1f
             dropoffButton.alpha = 1f
             pickupButton.visibility = if (hasAddress && !nextIsDropoff && !tentative) View.VISIBLE else View.GONE
@@ -344,8 +352,8 @@ class FloatingPanel(
         } else {
             pickupButton.text = "Embarque"
             dropoffButton.text = "Destino"
-            pickupButton.textSize = 12f
-            dropoffButton.textSize = 12f
+            pickupButton.textSize = 14f
+            dropoffButton.textSize = 14f
             val wazeVis = if (hasAddress) View.VISIBLE else View.GONE
             pickupButton.visibility = wazeVis
             dropoffButton.visibility = wazeVis
