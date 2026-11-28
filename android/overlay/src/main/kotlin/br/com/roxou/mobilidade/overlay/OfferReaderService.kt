@@ -424,7 +424,7 @@ class OfferReaderService : AccessibilityService() {
         if (!driverAppFullScreen()) return
         run {
             when {
-                AcceptDetector.looksEnded(lines) -> { p.rideEnded(); RideNotification.hide(this) }
+                AcceptDetector.looksEnded(lines) -> { if (p.rideEnded()) RideNotification.hide(this) }
                 AcceptDetector.looksOnTrip(lines) -> p.passengerOnBoard()
                 // Navegação mostrando a rua do destino (e não mais a do embarque): passageiro a bordo.
                 AcceptDetector.mentionsStreet(lines, acceptedDropoff) && !AcceptDetector.mentionsStreet(lines, acceptedPickup) -> p.passengerOnBoard()
