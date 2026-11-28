@@ -60,8 +60,16 @@ object OfferParser {
         .firstOrNull { it in 1.0..5.0 }
 
     fun parse(lines: List<OcrLine>, platform: Platform): ParsedOffer? {
-        val sorted = lines.filter { it.text.isNotBlank() }.sortedBy { it.top }
+        val sorted = lines.filter { it.text.isNotBlank() }.map { it.copy(text = fixOcr(it.text)) }.sortedBy { it.top }
+        // O OCR às vezes devolve a mesma linha duas vezes (cartão animando): a viagem saía igual à busca
+        // ("9 min (7.6 km)" duas vezes, R$ 300/h no registro de 28/11). Linha repetida no mesmo lugar não conta.
         val legs = sorted.mapNotNull { line -> timeDist.find(line.text)?.let { line to it } }
+            .fold(mutableListOf<Pair<OcrLine, MatchResult>>()) { acc, cur ->
+                val prev = acc.lastOrNull()
+                val dup = prev != null && prev.second.value == cur.second.value && kotlin.math.abs(prev.first.top - cur.first.top) < prev.first.height * 2
+                if (!dup) acc.add(cur)
+                acc
+            }
         if (legs.size < 2) return null
         val (pickupLine, pickupMatch) = legs[0]
         val (tripLine, tripMatch) = legs[1]
@@ -152,9 +160,18 @@ object OfferParser {
 
     private fun sameColumn(a: OcrLine, ref: OcrLine) = a.left >= ref.left - 60 && a.left <= ref.left + 120
 
+    /** Letras que o OCR troca por números: "R$ 12,0l" → "R$ 12,01", "4.1l km" → "4.11 km", "1O min" → "10 min". */
+    internal fun fixOcr(t: String): String = t
+        .replace(Regex("(?<=\\d)[lI|](?=[\\d\\s,.)]|$|\\s*km)"), "1")
+        .replace(Regex("(?<=\\d)[oO](?=\\d|\\s*min)"), "0")
+
     private fun leg(m: MatchResult): Pair<Double, Int> {
         val hours = m.groupValues[1].toIntOrNull() ?: 0
-        val minutes = m.groupValues[2].toInt() + hours * 60
+        var raw = m.groupValues[2].toInt()
+        // Ícone lido como número na frente: "910 min" era "10 min" (registro de 28/11). Corrida de cidade
+        // não leva 100+ min; com 3 dígitos, fica com os 2 últimos.
+        if (hours == 0 && m.groupValues[2].length == 3 && raw >= 100) raw %= 100
+        val minutes = raw + hours * 60
         val value = m.groupValues[3].replace(',', '.').toDouble()
         val km = if (m.groupValues[4].equals("m", ignoreCase = true)) value / 1000.0 else value
         return km to minutes

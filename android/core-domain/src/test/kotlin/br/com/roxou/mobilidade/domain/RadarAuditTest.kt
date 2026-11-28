@@ -193,4 +193,32 @@ class RadarAuditTest {
         assertEquals(15, o.pickupMinutes + o.tripMinutes)
         assertEquals(4.91, o.passengerRating!!, 1e-9)
     }
+
+    /** Registro exportado de 28/11: erros do OCR vistos na rua. */
+    @Test fun erros_do_ocr_do_registro_de_28_11() {
+        // "910 min": ícone lido como 9 na frente de "10 min".
+        val a = OfferParser.parse(listOf(
+            l("R$12,20", 1000, h = 110), l("3 min (0,7 km)", 1300), l("Rua A, 1", 1360), l("910 min (5,6 km)", 1500), l("Rua B, 2", 1560),
+        ), Platform.NINETY_NINE)!!
+        assertEquals(10, a.tripMinutes)
+        // Linha repetida pelo OCR: a viagem não pode virar cópia da busca.
+        val b = OfferParser.parse(listOf(
+            l("R$ 30,03", 1000, h = 110), l("3 min (0.9 km)", 1300), l("3 min (0.9 km)", 1305), l("Rua A, 1", 1360),
+            l("29 minutos (13.8 km)", 1500), l("Rua B, 2", 1560),
+        ), Platform.UBER)!!
+        assertEquals(13.8, b.tripKm, 1e-9)
+        assertEquals(29, b.tripMinutes)
+        // "R$ 12,0l" e "4.1l km": letra l no lugar do 1.
+        val c = OfferParser.parse(listOf(
+            l("R$ 13,0l", 1000, h = 110), l("8 min (4.1l km)", 1300), l("Rua A, 1", 1360), l("14 minutos (41 km)", 1500), l("Rua B, 2", 1560),
+        ), Platform.UBER)!!
+        assertEquals(13_01L, c.fareCents)
+        assertEquals(4.11, c.pickupKm, 1e-9)
+        assertEquals(4.1, c.tripKm, 1e-9) // ponto perdido: 41 km em 14 min é impossível
+    }
+
+    @Test fun uber_indo_buscar_e_aceite() {
+        val d = br.com.roxou.mobilidade.domain.offer.AcceptDetector
+        assertTrue(d.looksAccepted(listOf(l("4 min", 2000), l("Embarque de Maria", 2080))))
+    }
 }
