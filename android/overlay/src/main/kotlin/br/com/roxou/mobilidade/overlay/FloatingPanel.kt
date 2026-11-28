@@ -169,14 +169,14 @@ class FloatingPanel(
     val isTentative: Boolean get() = tentative
     private val endTentative = Runnable { if (tentative) { tentative = false; backToRide() } }
 
-    /** A oferta saiu e o app não viu o aceite: por 15 s pergunta "Aceitou?". Só o ✔ grava a corrida (e aí vem o Waze). */
+    /** A oferta saiu e o app não viu o aceite: por 10 s pergunta "Aceitou?". Só o ✔ grava a corrida (e aí vem o Waze). */
     fun maybeAccepted() {
         if (!hasAddress || (mode == Mode.WAZE && !rideActive)) return
         tentative = true
         nextIsDropoff = false
         handler.removeCallbacks(hide)
         handler.removeCallbacks(endTentative)
-        handler.postDelayed(endTentative, 15_000)
+        handler.postDelayed(endTentative, 10_000)
         setMode(Mode.WAZE)
     }
 
@@ -219,7 +219,9 @@ class FloatingPanel(
     fun rideEnded() {
         rideActive = false
         rideOnBoard = false
-        if (mode == Mode.WAZE && !tentative) setMode(Mode.NONE)
+        // "Procurando viagens" na tela: a oferta foi embora sem aceite, a pergunta "Aceitou?" some também.
+        if (tentative) { tentative = false; handler.removeCallbacks(endTentative) }
+        if (mode == Mode.WAZE) setMode(Mode.NONE)
     }
 
     /** Oferta nova saiu da tela: volta para o botão da corrida em andamento, se houver. */
