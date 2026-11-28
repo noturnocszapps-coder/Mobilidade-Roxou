@@ -59,15 +59,15 @@ class SettingsViewModel(private val repo: RoxouRepository) : ViewModel() {
 private fun centsText(c: Long) = String.format(java.util.Locale.forLanguageTag("pt-BR"), "%.2f", c / 100.0)
 
 @Composable
-fun SettingsScreen(repo: RoxouRepository) {
+fun SettingsScreen(repo: RoxouRepository, onConta: () -> Unit) {
     val vm: SettingsViewModel = viewModel { SettingsViewModel(repo) }
     val current by vm.settings.collectAsStateWithLifecycle()
     val s = current ?: return
-    SettingsForm(s, onSave = vm::save)
+    SettingsForm(s, onSave = vm::save, onConta = onConta)
 }
 
 @Composable
-private fun SettingsForm(initial: AppSettings, onSave: (AppSettings) -> Unit) {
+private fun SettingsForm(initial: AppSettings, onSave: (AppSettings) -> Unit, onConta: () -> Unit) {
     var ownership by remember(initial) { mutableStateOf(initial.ownership) }
     var company by remember(initial) { mutableStateOf(initial.rental.companyName) }
     var installment by remember(initial) { mutableStateOf(centsText(initial.rental.weeklyInstallmentCents)) }
@@ -95,6 +95,7 @@ private fun SettingsForm(initial: AppSettings, onSave: (AppSettings) -> Unit) {
     val pendingCodes = o.areaCodes.filterValues { it.isBlank() }.keys
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        ContaCard(onAbrir = onConta)
         ReaderCard()
         SectionCard("O que compensa") {
             Text("Os limites de R$/km, R$/hora, busca máxima e os bairros que você evita ficam na aba \"Compensa\".", style = MaterialTheme.typography.bodySmall)

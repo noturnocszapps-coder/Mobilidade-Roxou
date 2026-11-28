@@ -38,9 +38,13 @@ jobs:
       - name: Rodar os testes (viradas, faixas, locação, caixa)
         run: |
           chmod +x gradlew
-          ./gradlew :core-domain:test testDebugUnitTest --no-daemon
+          ./gradlew :core-domain:test :core-licenca:test testDebugUnitTest --no-daemon
 
       - name: Gerar o APK debug
+        env:
+          # Sem estas variáveis, o APK de teste libera tudo (modo de teste).
+          ROXOU_API_URL: ${{ vars.ROXOU_API_URL }}
+          ROXOU_LICENCA_CHAVE_PUBLICA: ${{ vars.ROXOU_LICENCA_CHAVE_PUBLICA }}
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Dar nome ao APK
@@ -56,6 +60,28 @@ jobs:
           name: roxou-mobilidade-apk
           path: android/${{ steps.apk.outputs.nome }}
           retention-days: 30
+
+      # APK de testador: R8, trava sozinho depois de ROXOU_TESTADOR_HORAS (padrão 24 h) contadas
+      # a partir deste build. Para mandar um novo, rode este workflow de novo (Re-run jobs).
+      - name: Gerar o APK de testador
+        id: testador
+        env:
+          ROXOU_TESTADOR_HORAS: ${{ vars.ROXOU_TESTADOR_HORAS || '24' }}
+        run: |
+          export ROXOU_CERT_SHA256=$(keytool -list -v -keystore keystore/debug.keystore -storepass android -alias androiddebugkey | grep 'SHA256:' | head -1 | awk '{print $2}')
+          ./gradlew assembleAvaliacao --no-daemon
+          VENCE=$(TZ=America/Sao_Paulo date -d "+${ROXOU_TESTADOR_HORAS} hours" '+%d-%m-%Hh%M')
+          NOME="roxou-testador-vence-${VENCE}.apk"
+          cp app/build/outputs/apk/avaliacao/app-avaliacao.apk "$NOME"
+          echo "nome=$NOME" >> "$GITHUB_OUTPUT"
+          echo "### APK de testador: vence em ${VENCE} (horário de Brasília)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guardar o APK de testador
+        uses: actions/upload-artifact@v4
+        with:
+          name: roxou-testador-apk
+          path: android/${{ steps.testador.outputs.nome }}
+          retention-days: 7
 
       - name: Guardar o relatório dos testes
         if: always()

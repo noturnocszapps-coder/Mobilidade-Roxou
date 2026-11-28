@@ -7,7 +7,20 @@ plugins {
 android {
     namespace = "br.com.roxou.mobilidade.data"
     compileSdk = 35
-    defaultConfig { minSdk = 26 }
+    defaultConfig {
+        minSdk = 26
+        // Vêm das variáveis do GitHub (Settings > Secrets and variables > Actions > Variables).
+        buildConfigField("String", "API_URL", "\"${System.getenv("ROXOU_API_URL").orEmpty()}\"")
+        buildConfigField("String", "CHAVE_PUBLICA", "\"${System.getenv("ROXOU_LICENCA_CHAVE_PUBLICA").orEmpty()}\"")
+        buildConfigField("String", "CERT_SHA256", "\"${System.getenv("ROXOU_CERT_SHA256").orEmpty().replace(":", "").lowercase()}\"")
+    }
+    buildFeatures { buildConfig = true }
+    buildTypes.configureEach {
+        // APK de testador: vence ROXOU_TESTADOR_HORAS depois do build (0 = não é de testador).
+        val horas = System.getenv("ROXOU_TESTADOR_HORAS")?.toLongOrNull() ?: 0L
+        val expira = if (horas > 0) System.currentTimeMillis() / 1000 + horas * 3600 else 0L
+        buildConfigField("long", "TESTE_EXPIRA_SEG", "${expira}L")
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -17,6 +30,7 @@ android {
 
 dependencies {
     api(project(":core-domain"))
+    api(project(":core-licenca"))
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)

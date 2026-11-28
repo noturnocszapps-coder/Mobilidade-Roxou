@@ -39,6 +39,8 @@ import br.com.roxou.mobilidade.design.ModuloUi
 import br.com.roxou.mobilidade.design.NovaCorridaSheet
 import br.com.roxou.mobilidade.design.PlanoUi
 import br.com.roxou.mobilidade.design.PlanosScreen
+import br.com.roxou.mobilidade.data.conta.LicencaStore
+import br.com.roxou.mobilidade.data.conta.RoxouApi
 import br.com.roxou.mobilidade.design.Recursos
 import br.com.roxou.mobilidade.design.RoxouColors
 import br.com.roxou.mobilidade.design.RoxouDesignTheme
@@ -112,6 +114,8 @@ fun RoxouNavHost(repo: RoxouRepository) {
     val scope = rememberCoroutineScope()
     var aba by rememberSaveable { mutableStateOf(Aba.INICIO) }
     var planos by rememberSaveable { mutableStateOf(false) }
+    val licencas = remember { LicencaStore.get(context.applicationContext) }
+    val conta by licencas.estado.collectAsStateWithLifecycle()
     var novaCorrida by rememberSaveable { mutableStateOf(false) }
     var leituraLigada by remember { mutableStateOf(isReaderOn(context)) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -126,6 +130,13 @@ fun RoxouNavHost(repo: RoxouRepository) {
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 
     RoxouDesignTheme {
+        if (conta.testador && conta.situacao == br.com.roxou.mobilidade.licenca.Situacao.VENCIDA) {
+            // APK de testador vencido: o app inteiro fica travado. Só um APK novo libera.
+            Box(Modifier.fillMaxSize().background(RoxouColors.Background).safeDrawingPadding()) {
+                TesteEncerradoScreen()
+            }
+            return@RoxouDesignTheme
+        }
         if (!boasVindas) {
             // Margem das barras do sistema: o "Depois" ficava atrás da barra de navegação.
             Box(Modifier.fillMaxSize().background(RoxouColors.Background).safeDrawingPadding()) {
@@ -134,6 +145,13 @@ fun RoxouNavHost(repo: RoxouRepository) {
                     onLigarLeitura = ligarLeitura,
                     leituraLigada = leituraLigada,
                 )
+            }
+            return@RoxouDesignTheme
+        }
+        if (planos && conta.contaDisponivel) {
+            // Com o servidor configurado: login por código, planos de verdade e Pix.
+            Box(Modifier.fillMaxSize().background(RoxouColors.Background).safeDrawingPadding()) {
+                ContaScreen(onFechar = { planos = false })
             }
             return@RoxouDesignTheme
         }
@@ -219,8 +237,8 @@ fun RoxouNavHost(repo: RoxouRepository) {
                             codigosParaTraduzir = s.offer.areaCodes.filterValues { it.isBlank() }.keys.toList(),
                             codigos = s.offer.areaCodes.map { it.key to it.value },
                             modulos = MODULOS,
-                            planoAtual = "Teste · tudo liberado",
-                            emailConta = null,
+                            planoAtual = resumo(conta),
+                            emailConta = conta.email,
                         ),
                         onRecursos = prefs::setRecursos,
                         onLigarLeitura = ligarLeitura,
@@ -249,7 +267,10 @@ fun RoxouNavHost(repo: RoxouRepository) {
                         },
                         onDesbloquear = { planos = true },
                         onVerPlanos = { planos = true },
-                        onSair = { toast("Login entra com a assinatura. Por enquanto não há conta.") },
+                        onSair = {
+                            if (conta.logado) scope.launch { RoxouApi(licencas).sair() }
+                            else toast("Você não entrou em nenhuma conta.")
+                        },
                     )
                 }
             }

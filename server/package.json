@@ -1,0 +1,19 @@
+{
+  "name": "roxou-mobilidade-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "API do Roxou Mobilidade: login, planos, assinatura (Asaas) e licença do app.",
+  "scripts": {
+    "start": "node src/index.js",
+    "gerar-chaves": "node scripts/gerar-chaves.js",
+    "banco": "node scripts/criar-banco.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "express": "^4.21.2",
+    "nodemailer": "^6.9.16",
+    "pg": "^8.13.1"
+  }
+}
