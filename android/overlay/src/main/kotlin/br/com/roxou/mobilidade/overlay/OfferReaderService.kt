@@ -56,6 +56,7 @@ class OfferReaderService : AccessibilityService() {
     private var lastOfferSeen = 0L
     private var lastShot = 0L
     private var shotPending = false
+    private var shotStartedAt = 0L
     private var triesThisOffer = 0
     private var offerVisible = false
 
@@ -137,6 +138,21 @@ class OfferReaderService : AccessibilityService() {
         checkRideStage(now)
     }
 
+    /**
+     * A Uber ou a 99 está ocupando a tela (e não só a bolhinha ou o cartão por cima de outro app)?
+     * Aceite só vale lido na tela do app de motorista: lendo o chat, o navegador ou outro app,
+     * palavras como "a caminho" ou o nome da rua apareciam e marcavam aceite falso (27/11).
+     */
+    private fun driverAppFullScreen(): Boolean {
+        val screenH = resources.displayMetrics.heightPixels
+        return runCatching {
+            windows.any { w ->
+                val pkg = w.root?.packageName?.toString() ?: return@any false
+                pkg in DRIVER_APPS && Rect().also { w.getBoundsInScreen(it) }.height() > screenH * 0.6
+            }
+        }.getOrDefault(false)
+    }
+
     private fun appName(pkg: String) = when (pkg) {
         UBER -> "Uber"
         NINETY_NINE -> "99"
@@ -144,6 +160,12 @@ class OfferReaderService : AccessibilityService() {
     }
 
     private fun checkForOffer(now: Long) {
+        // Trava de segurança: se uma leitura nunca terminou (erro do Android ou do OCR), libera de novo.
+        // Antes, uma leitura presa deixava o Radar cego até reiniciar o serviço.
+        if (shotPending && now - shotStartedAt > 8_000) {
+            shotPending = false
+            Diag.log("Leitura presa há mais de 8 s: liberada")
+        }
         // A oferta pode vir numa janela por cima (a da Uber aparece por cima da 99 e do Waze),
         // então procura em todas as janelas visíveis, não só na janela ativa.
         val roots = runCatching { windows.mapNotNull { it.root } }.getOrDefault(emptyList())
@@ -219,6 +241,7 @@ class OfferReaderService : AccessibilityService() {
 
     private fun shoot(delay: Long, pkg: String, byScan: Boolean) {
         shotPending = true
+        shotStartedAt = SystemClock.uptimeMillis()
         handler.postDelayed({
             if (!byScan) triesThisOffer++
             // Tela inteira: o recorte pelo cartão cortava o valor em variantes da Uber
@@ -316,7 +339,7 @@ class OfferReaderService : AccessibilityService() {
         handler.postDelayed({
             if (offer.key != lastOffer?.key || offer.key in loggedKeys) return@postDelayed
             screenshotText(null) { lines ->
-                val accepted = lines != null && (
+                val accepted = lines != null && driverAppFullScreen() && (
                     AcceptDetector.looksAccepted(lines) ||
                         // A navegação da 99 até o passageiro mostra a rua do embarque desta oferta.
                         AcceptDetector.mentionsStreet(lines, offer.pickupAddress)
@@ -339,6 +362,7 @@ class OfferReaderService : AccessibilityService() {
     private fun watchAccept(lines: List<OcrLine>) {
         val o = lastOffer ?: return
         if (SystemClock.uptimeMillis() > acceptWatchUntil || o.key in loggedKeys) return
+        if (!driverAppFullScreen()) return
         if (AcceptDetector.looksAccepted(lines) || AcceptDetector.mentionsStreet(lines, o.pickupAddress)) {
             Diag.log("Aceite visto numa leitura depois que a oferta saiu")
             logAccepted(byButton = false)
@@ -380,6 +404,7 @@ class OfferReaderService : AccessibilityService() {
         if (!p.inRide || offerVisible || shotPending || now - lastStageCheck < 8_000) return
         lastStageCheck = now
         shotPending = true
+        shotStartedAt = now
         screenshotText(null) { lines ->
             shotPending = false
             // A mesma leitura também procura oferta nova por cima da corrida (antes ela só via a etapa
@@ -396,6 +421,7 @@ class OfferReaderService : AccessibilityService() {
 
     private fun applyRideStage(lines: List<OcrLine>) {
         val p = panel ?: return
+        if (!driverAppFullScreen()) return
         run {
             when {
                 AcceptDetector.looksEnded(lines) -> { p.rideEnded(); RideNotification.hide(this) }
@@ -462,6 +488,15 @@ class OfferReaderService : AccessibilityService() {
         try {
             takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
                 override fun onSuccess(result: ScreenshotResult) {
+                    try {
+                        onShot(result)
+                    } catch (t: Throwable) {
+                        Diag.error("print", t)
+                        done(null)
+                    }
+                }
+
+                private fun onShot(result: ScreenshotResult) {
                     val hb = result.hardwareBuffer
                     val hw = Bitmap.wrapHardwareBuffer(hb, result.colorSpace)
                     hb.close()
