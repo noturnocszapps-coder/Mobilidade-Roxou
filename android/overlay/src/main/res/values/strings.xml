@@ -1,0 +1,4 @@
+<resources>
+    <string name="reader_label">Roxou Mobilidade – leitura de ofertas</string>
+    <string name="reader_description">Lê o valor, os km e os tempos do cartão de oferta da Uber e da 99 para mostrar se a corrida compensa. A imagem é lida no próprio celular e apagada na hora. O app nunca aceita nem recusa corridas.</string>
+</resources>

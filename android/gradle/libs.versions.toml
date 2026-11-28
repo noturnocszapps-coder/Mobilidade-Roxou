@@ -11,6 +11,7 @@ room = "2.6.1"
 datastore = "1.1.1"
 coreKtx = "1.15.0"
 junit = "4.13.2"
+mlkitText = "16.0.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -30,6 +31,7 @@ room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+mlkit-text = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitText" }
 junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]

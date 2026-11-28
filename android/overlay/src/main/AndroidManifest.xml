@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <queries>
+        <package android:name="com.waze" />
+        <package android:name="com.google.android.apps.maps" />
+    </queries>
+    <application>
+        <!-- Lê o cartão de oferta da Uber e da 99 e mostra a janela flutuante.
+             Só lê: nunca clica, nunca aceita nem recusa corrida. -->
+        <service
+            android:name=".OfferReaderService"
+            android:exported="false"
+            android:label="@string/reader_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/roxou_reader_config" />
+        </service>
+        <!-- Botões "Embarque" e "Destino" da notificação da corrida aceita. -->
+        <receiver android:name=".RideActionReceiver" android:exported="false" />
+    </application>
+</manifest>
