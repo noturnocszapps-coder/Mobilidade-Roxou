@@ -220,6 +220,16 @@ class FloatingPanel(
     private val rideTimeout = Runnable { queued = 0; queueSwitchAt = 0; rideEnded() }
 
     /** Viagem terminou: a janelinha some. */
+    /**
+     * Tela de espera da Uber/99: não há corrida nenhuma (nem na fila). Apaga pergunta, botão e fila.
+     * Diferente do "fim de viagem", que passa para a corrida da fila.
+     */
+    fun idle() {
+        queued = 0
+        queueSwitchAt = 0
+        rideEnded()
+    }
+
     /** Corridas aceitas durante outra corrida (Uber/99 em sequência). */
     private var queued = 0
     private var queueSwitchAt = 0L

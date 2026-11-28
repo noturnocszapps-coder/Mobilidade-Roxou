@@ -29,4 +29,21 @@ class ReadPlanTest {
         // Depois de 10 conferências, não para: continua vigiando a tela.
         assertEquals(Action.KEEP_WATCHING, plan(read = true, tries = 1, sinceRead = 60_000, rereads = 10, sinceShot = 3_100))
     }
+
+    @Test fun tela_buscando_da_99_e_fim_e_nao_e_aceite() {
+        val lines = listOf("R$0,00", "0% de Taxa", "Solicitações (4) Nova", "Expirado. Renove para ganhar mais!", "Buscando")
+            .mapIndexed { i, t -> br.com.roxou.mobilidade.domain.offer.OcrLine(t, 0, i * 100, 500, i * 100 + 40) }
+        org.junit.Assert.assertTrue(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksEnded(lines))
+        org.junit.Assert.assertFalse(br.com.roxou.mobilidade.domain.offer.AcceptDetector.looksAccepted(lines))
+        org.junit.Assert.assertNull(br.com.roxou.mobilidade.domain.offer.OfferParser.parse(lines, br.com.roxou.mobilidade.domain.model.Platform.NINETY_NINE))
+    }
+
+    @Test fun telas_de_espera_da_uber_e_da_99() {
+        fun ls(vararg t: String) = t.mapIndexed { i, x -> br.com.roxou.mobilidade.domain.offer.OcrLine(x, 0, i * 100, 500, i * 100 + 40) }
+        val d = br.com.roxou.mobilidade.domain.offer.AcceptDetector
+        org.junit.Assert.assertTrue(d.looksIdle(ls("+R$ 3,25", "1-12 min", "Você está online", "O passe de 24 horas está ativo")))
+        org.junit.Assert.assertTrue(d.looksIdle(ls("Procurando viagens")))
+        org.junit.Assert.assertTrue(d.looksIdle(ls("Solicitações (4) Nova", "Buscando")))
+        org.junit.Assert.assertFalse(d.looksIdle(ls("5 min", "2,3 km", "Destino de Maria")))
+    }
 }

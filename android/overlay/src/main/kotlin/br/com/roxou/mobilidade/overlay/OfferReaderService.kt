@@ -344,9 +344,16 @@ class OfferReaderService : AccessibilityService() {
      * O cartão sumiu: olha a tela para ver se virou "a caminho" (o motorista aceitou).
      * Olha duas vezes (1,5 s e 4 s depois). Sem aceite, a oferta entra no histórico como recusada.
      */
+    /** Oferta que já teve a checagem de aceite: a mesma oferta não abre a pergunta "Aceitou?" de novo. */
+    private var acceptCheckedKey: String? = null
+
     private fun checkAcceptedSoon(attempt: Int = 0) {
         val offer = lastOffer ?: return
         if (offer.key in loggedKeys) return
+        if (attempt == 0) {
+            if (acceptCheckedKey == offer.key) return
+            acceptCheckedKey = offer.key
+        }
         if (SystemClock.uptimeMillis() - lastOfferShownAt > 90_000) { record(OfferOutcome.REJECTED); return }
         handler.postDelayed({
             if (offer.key != lastOffer?.key || offer.key in loggedKeys) return@postDelayed
@@ -437,6 +444,11 @@ class OfferReaderService : AccessibilityService() {
         if (!driverAppFullScreen()) return
         run {
             when {
+                AcceptDetector.looksIdle(lines) -> {
+                    if (p.inRide) Diag.log("Tela de espera da Uber/99: botão e pergunta apagados")
+                    p.idle()
+                    RideNotification.hide(this)
+                }
                 AcceptDetector.looksEnded(lines) -> { if (p.rideEnded()) RideNotification.hide(this) }
                 AcceptDetector.looksOnTrip(lines) -> p.passengerOnBoard()
                 // Navegação mostrando a rua do destino (e não mais a do embarque): passageiro a bordo.
