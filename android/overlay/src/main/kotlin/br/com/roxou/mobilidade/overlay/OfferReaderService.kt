@@ -382,7 +382,15 @@ class OfferReaderService : AccessibilityService() {
         shotPending = true
         screenshotText(null) { lines ->
             shotPending = false
-            if (lines != null) applyRideStage(lines)
+            // A mesma leitura também procura oferta nova por cima da corrida (antes ela só via a etapa
+            // da viagem e a oferta sobreposta podia passar sem avaliação).
+            if (lines != null) {
+                try {
+                    onScreenText(lines, activeApp.ifEmpty { UBER }, byScan = true)
+                } catch (t: Throwable) {
+                    Diag.error("leitura", t)
+                }
+            }
         }
     }
 
