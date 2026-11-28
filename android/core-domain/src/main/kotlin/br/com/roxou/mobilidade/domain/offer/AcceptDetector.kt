@@ -17,7 +17,8 @@ object AcceptDetector {
         // 99 (navegação própria até o embarque, visto em 27/11): "Chegue antes de 19:48".
         "chegue antes de", "a caminho do embarque", "local de embarque", "passageiro te espera",
     )
-    private val stillLooking = listOf("procurando", "buscando viagens", "buscando corridas", "voce esta online", "ficar offline")
+    // "Buscando" sozinho é a tela de espera da 99 (print de 28/11, com "Solicitações (4)").
+    private val stillLooking = listOf("procurando", "buscando", "voce esta online", "ficar offline")
 
     /** Passageiro a bordo: a tela já mostra o fim da viagem (hora de ir ao destino). */
     private val onTripWords = listOf(
@@ -33,6 +34,12 @@ object AcceptDetector {
     fun looksOnTrip(lines: List<OcrLine>): Boolean {
         val text = " " + lines.joinToString(" ") { AreaFilter.normalize(it.text) } + " "
         return onTripWords.any { text.contains(it) }
+    }
+
+    /** Tela de espera, sem corrida nenhuma: Uber "Você está online"/"Procurando viagens", 99 "Buscando". */
+    fun looksIdle(lines: List<OcrLine>): Boolean {
+        val text = " " + lines.joinToString(" ") { AreaFilter.normalize(it.text) } + " "
+        return stillLooking.any { text.contains(it) }
     }
 
     fun looksEnded(lines: List<OcrLine>): Boolean {

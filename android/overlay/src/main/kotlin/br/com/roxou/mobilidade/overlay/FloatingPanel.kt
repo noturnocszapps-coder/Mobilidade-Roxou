@@ -71,10 +71,11 @@ class FloatingPanel(
         text = label
         gravity = Gravity.CENTER
         minHeight = dp(44)
-        setPadding(dp(12), dp(0), dp(12), dp(0))
         background = android.graphics.drawable.InsetDrawable(
             GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(bg) }, 0, dp(7), 0, dp(7),
         )
+        // O padding vem DEPOIS do fundo: trocar o fundo zera o padding (o texto encostava nas bordas).
+        setPadding(dp(12), dp(7), dp(12), dp(7))
     }
     /** Etapa 1: até o passageiro (ponto A). Etapa 2: do ponto A até o destino (ponto B). */
     private val pickupButton = pill("Embarque", Color.parseColor("#33CCFF"))
@@ -169,14 +170,14 @@ class FloatingPanel(
     val isTentative: Boolean get() = tentative
     private val endTentative = Runnable { if (tentative) { tentative = false; backToRide() } }
 
-    /** A oferta saiu e o app não viu o aceite: por 15 s pergunta "Aceitou?". Só o ✔ grava a corrida (e aí vem o Waze). */
+    /** A oferta saiu e o app não viu o aceite: por 10 s pergunta "Aceitou?". Só o ✔ grava a corrida (e aí vem o Waze). */
     fun maybeAccepted() {
         if (!hasAddress || (mode == Mode.WAZE && !rideActive)) return
         tentative = true
         nextIsDropoff = false
         handler.removeCallbacks(hide)
         handler.removeCallbacks(endTentative)
-        handler.postDelayed(endTentative, 15_000)
+        handler.postDelayed(endTentative, 10_000)
         setMode(Mode.WAZE)
     }
 
@@ -187,6 +188,8 @@ class FloatingPanel(
         logged = true
         if (PanelPrefs.wazeAfterAccept(context) && hasAddress) {
             handler.removeCallbacks(hide)
+            // Aceitou outra durante uma corrida: esta fica na fila e o fim da atual não apaga o botão dela.
+            if (rideActive) queued++
             rideActive = true
             rideOnBoard = false
             nextIsDropoff = false
@@ -205,7 +208,8 @@ class FloatingPanel(
 
     /** O passageiro entrou: o botão passa a levar ao destino. */
     fun passengerOnBoard() {
-        if (!rideActive || rideOnBoard) return
+        // Com corrida na fila, o "finalizar viagem" na tela é da corrida atual, não da que está na fila.
+        if (!rideActive || rideOnBoard || queued > 0) return
         rideOnBoard = true
         if (mode == Mode.WAZE && !tentative) {
             nextIsDropoff = true
@@ -213,13 +217,46 @@ class FloatingPanel(
         }
     }
 
-    private val rideTimeout = Runnable { rideEnded() }
+    private val rideTimeout = Runnable { queued = 0; queueSwitchAt = 0; rideEnded() }
 
     /** Viagem terminou: a janelinha some. */
-    fun rideEnded() {
+    /**
+     * Tela de espera da Uber/99: não há corrida nenhuma (nem na fila). Apaga pergunta, botão e fila.
+     * Diferente do "fim de viagem", que passa para a corrida da fila.
+     */
+    fun idle() {
+        queued = 0
+        queueSwitchAt = 0
+        rideEnded()
+    }
+
+    /** Corridas aceitas durante outra corrida (Uber/99 em sequência). */
+    private var queued = 0
+    private var queueSwitchAt = 0L
+
+    /**
+     * Viagem terminou. Se havia corrida na fila, passa para ela ("Ir ao embarque" da próxima) e devolve false.
+     * A tela de fim fica alguns segundos: por 90 s depois de trocar, novos "fim" são ignorados.
+     */
+    fun rideEnded(): Boolean {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - queueSwitchAt < 90_000) return false
+        if (queued > 0 && rideActive) {
+            queued--
+            queueSwitchAt = now
+            rideOnBoard = false
+            nextIsDropoff = false
+            if (tentative) { tentative = false; handler.removeCallbacks(endTentative) }
+            setMode(Mode.WAZE)
+            return false
+        }
+        queued = 0
         rideActive = false
         rideOnBoard = false
-        if (mode == Mode.WAZE && !tentative) setMode(Mode.NONE)
+        // "Procurando viagens" na tela: a oferta foi embora sem aceite, a pergunta "Aceitou?" some também.
+        if (tentative) { tentative = false; handler.removeCallbacks(endTentative) }
+        if (mode == Mode.WAZE) setMode(Mode.NONE)
+        return true
     }
 
     /** Oferta nova saiu da tela: volta para o botão da corrida em andamento, se houver. */
