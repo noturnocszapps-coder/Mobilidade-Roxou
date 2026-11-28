@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,9 +36,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +52,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
+
+private data class AjudaJanela(
+    val titulo: String,
+    val explicacao: String,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,11 +70,10 @@ fun JanelaAjustesSheet(
     onNotaMinima: (Double) -> Unit,
     onWaze: (Boolean) -> Unit,
     onFechar: () -> Unit,
-    /** 0 = Waze, 1 = Google Maps. */
-    mapa: Int = 0,
-    onMapa: (Int) -> Unit = {},
-    notificacao: Boolean = true,
-    onNotificacao: (Boolean) -> Unit = {},
+    perguntarAceite: Boolean = true,
+    onPerguntarAceite: (Boolean) -> Unit = {},
+    mapaPadrao: String = "Waze",
+    onMapaPadrao: (String) -> Unit = {},
 ) {
     ModalBottomSheet(
         onDismissRequest = onFechar,
@@ -77,15 +87,15 @@ fun JanelaAjustesSheet(
             segundos = segundos,
             notaMinima = notaMinima,
             wazeDepoisDoAceite = wazeDepoisDoAceite,
+            perguntarAceite = perguntarAceite,
+            mapaPadrao = mapaPadrao,
             onPosicao = onPosicao,
             onSegundos = onSegundos,
             onNotaMinima = onNotaMinima,
             onWaze = onWaze,
+            onPerguntarAceite = onPerguntarAceite,
+            onMapaPadrao = onMapaPadrao,
             onFechar = onFechar,
-            mapa = mapa,
-            onMapa = onMapa,
-            notificacao = notificacao,
-            onNotificacao = onNotificacao,
         )
     }
 }
@@ -97,17 +107,18 @@ private fun JanelaAjustesConteudo(
     segundos: Int,
     notaMinima: Double,
     wazeDepoisDoAceite: Boolean,
+    perguntarAceite: Boolean,
+    mapaPadrao: String,
     onPosicao: (Int) -> Unit,
     onSegundos: (Int) -> Unit,
     onNotaMinima: (Double) -> Unit,
     onWaze: (Boolean) -> Unit,
+    onPerguntarAceite: (Boolean) -> Unit,
+    onMapaPadrao: (String) -> Unit,
     onFechar: () -> Unit,
-    /** 0 = Waze, 1 = Google Maps. */
-    mapa: Int = 0,
-    onMapa: (Int) -> Unit = {},
-    notificacao: Boolean = true,
-    onNotificacao: (Boolean) -> Unit = {},
 ) {
+    var ajudaAberta by remember { mutableStateOf<AjudaJanela?>(null) }
+
     val tempos = listOf(2, 3, 5, 10)
     val notas = listOf(
         0.0 to "Não avisar",
@@ -116,6 +127,7 @@ private fun JanelaAjustesConteudo(
         4.85 to "4,85",
         4.90 to "4,90",
     )
+    val mapas = listOf("Waze", "Google Maps")
 
     Column(
         modifier = Modifier
@@ -150,154 +162,193 @@ private fun JanelaAjustesConteudo(
             }
         }
 
-        // 1. Posição (Esquerda, Centro, Direita) com desenho do celular
-        Column(verticalArrangement = Arrangement.spacedBy(RoxouSpacing.sm)) {
-            SecaoCabecalho(
-                titulo = "Posição na tela",
-                explicacao = "Escolha o lado onde o aviso aparece",
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
-            ) {
-                PosicaoCelularOpcao(
-                    rotulo = "Esquerda",
-                    alinhamento = Alignment.CenterStart,
-                    selecionado = posicao == 0,
-                    onClick = { onPosicao(0) },
-                    modifier = Modifier.weight(1f),
+        // BLOCO 1: Quando aparece
+        BlocoAjustes(titulo = "Quando aparece") {
+            // Posição na tela
+            Column(verticalArrangement = Arrangement.spacedBy(RoxouSpacing.sm)) {
+                OpcaoTituloComInfo(
+                    titulo = "Posição na tela",
+                    onInfo = {
+                        ajudaAberta = AjudaJanela(
+                            titulo = "Posição na tela",
+                            explicacao = "Escolhe em qual lado da tela a janela flutuante aparece quando chega uma oferta.",
+                        )
+                    },
                 )
-                PosicaoCelularOpcao(
-                    rotulo = "Centro",
-                    alinhamento = Alignment.Center,
-                    selecionado = posicao == 1,
-                    onClick = { onPosicao(1) },
-                    modifier = Modifier.weight(1f),
-                )
-                PosicaoCelularOpcao(
-                    rotulo = "Direita",
-                    alinhamento = Alignment.CenterEnd,
-                    selecionado = posicao == 2,
-                    onClick = { onPosicao(2) },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-
-        HorizontalDivider(thickness = 1.dp, color = RoxouColors.Divider)
-
-        // 2. Tempo na tela (2 s, 3 s, 5 s, 10 s)
-        Column(verticalArrangement = Arrangement.spacedBy(RoxouSpacing.sm)) {
-            SecaoCabecalho(
-                titulo = "Tempo na tela",
-                explicacao = "Quanto tempo a janela fica visível",
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
-            ) {
-                tempos.forEach { valor ->
-                    OpcaoBotao(
-                        texto = "$valor s",
-                        selecionado = segundos == valor,
-                        onClick = { onSegundos(valor) },
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
+                ) {
+                    PosicaoCelularOpcao(
+                        rotulo = "Esquerda",
+                        alinhamento = Alignment.CenterStart,
+                        selecionado = posicao == 0,
+                        onClick = { onPosicao(0) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    PosicaoCelularOpcao(
+                        rotulo = "Centro",
+                        alinhamento = Alignment.Center,
+                        selecionado = posicao == 1,
+                        onClick = { onPosicao(1) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    PosicaoCelularOpcao(
+                        rotulo = "Direita",
+                        alinhamento = Alignment.CenterEnd,
+                        selecionado = posicao == 2,
+                        onClick = { onPosicao(2) },
                         modifier = Modifier.weight(1f),
                     )
                 }
             }
-        }
 
-        HorizontalDivider(thickness = 1.dp, color = RoxouColors.Divider)
+            HorizontalDivider(thickness = 1.dp, color = RoxouColors.Divider)
 
-        // 3. Nota mínima do passageiro
-        Column(verticalArrangement = Arrangement.spacedBy(RoxouSpacing.sm)) {
-            SecaoCabecalho(
-                titulo = "Nota mínima do passageiro",
-                explicacao = "Avisa quando a nota ficar abaixo",
-            )
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
-                verticalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
-            ) {
-                notas.forEach { (valor, rotulo) ->
-                    OpcaoBotao(
-                        texto = rotulo,
-                        selecionado = abs(notaMinima - valor) < 0.005,
-                        onClick = { onNotaMinima(valor) },
-                    )
+            // Tempo na tela
+            Column(verticalArrangement = Arrangement.spacedBy(RoxouSpacing.sm)) {
+                OpcaoTituloComInfo(
+                    titulo = "Tempo na tela",
+                    onInfo = {
+                        ajudaAberta = AjudaJanela(
+                            titulo = "Tempo na tela",
+                            explicacao = "Define quantos segundos o aviso fica visível antes de sumir sozinho.",
+                        )
+                    },
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
+                ) {
+                    tempos.forEach { valor ->
+                        OpcaoBotao(
+                            texto = "$valor s",
+                            selecionado = segundos == valor,
+                            onClick = { onSegundos(valor) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(thickness = 1.dp, color = RoxouColors.Divider)
+
+            // Nota mínima do passageiro
+            Column(verticalArrangement = Arrangement.spacedBy(RoxouSpacing.sm)) {
+                OpcaoTituloComInfo(
+                    titulo = "Nota mínima do passageiro",
+                    onInfo = {
+                        ajudaAberta = AjudaJanela(
+                            titulo = "Nota mínima do passageiro",
+                            explicacao = "Mostra uma faixa vermelha de aviso quando a nota do passageiro ficar abaixo desse limite.",
+                        )
+                    },
+                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
+                ) {
+                    notas.forEach { (valor, rotulo) ->
+                        OpcaoBotao(
+                            texto = rotulo,
+                            selecionado = abs(notaMinima - valor) < 0.005,
+                            onClick = { onNotaMinima(valor) },
+                        )
+                    }
                 }
             }
         }
 
-        HorizontalDivider(thickness = 1.dp, color = RoxouColors.Divider)
-
-        // Mapa padrão
-        Column(verticalArrangement = Arrangement.spacedBy(RoxouSpacing.sm)) {
-            SecaoCabecalho(
-                titulo = "Mapa",
-                explicacao = "Qual app abre no embarque e no destino",
-            )
+        // BLOCO 2: Depois do aceite
+        BlocoAjustes(titulo = "Depois do aceite") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                listOf("Waze", "Google Maps").forEachIndexed { i, nome ->
-                    OpcaoBotao(texto = nome, selecionado = mapa == i, onClick = { onMapa(i) }, modifier = Modifier.weight(1f))
-                }
+                OpcaoTituloComInfo(
+                    titulo = "Perguntar se aceitou",
+                    onInfo = {
+                        ajudaAberta = AjudaJanela(
+                            titulo = "Perguntar se aceitou",
+                            explicacao = "Exibe uma confirmação rápida na tela para registrar a corrida nas suas metas.",
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(modifier = Modifier.width(RoxouSpacing.sm))
+                Switch(
+                    checked = perguntarAceite,
+                    onCheckedChange = onPerguntarAceite,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = RoxouColors.Purple,
+                        uncheckedThumbColor = RoxouColors.TextSecondary,
+                        uncheckedTrackColor = RoxouColors.Track,
+                        uncheckedBorderColor = RoxouColors.CardBorder,
+                    ),
+                )
+            }
+
+            HorizontalDivider(thickness = 1.dp, color = RoxouColors.Divider)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OpcaoTituloComInfo(
+                    titulo = "Abrir rota ao aceitar",
+                    onInfo = {
+                        ajudaAberta = AjudaJanela(
+                            titulo = "Abrir rota ao aceitar",
+                            explicacao = "Mostra o atalho direto para abrir o embarque e depois o destino no mapa.",
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(modifier = Modifier.width(RoxouSpacing.sm))
+                Switch(
+                    checked = wazeDepoisDoAceite,
+                    onCheckedChange = onWaze,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = RoxouColors.Purple,
+                        uncheckedThumbColor = RoxouColors.TextSecondary,
+                        uncheckedTrackColor = RoxouColors.Track,
+                        uncheckedBorderColor = RoxouColors.CardBorder,
+                    ),
+                )
             }
         }
 
-        HorizontalDivider(thickness = 1.dp, color = RoxouColors.Divider)
-
-        // 4. Waze depois do aceite
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SecaoCabecalho(
-                titulo = "Botão do mapa na corrida",
-                explicacao = "Ir ao embarque e, com o passageiro a bordo, ir ao destino",
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(modifier = Modifier.width(RoxouSpacing.sm))
-            Switch(
-                checked = wazeDepoisDoAceite,
-                onCheckedChange = onWaze,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = RoxouColors.Purple,
-                    uncheckedThumbColor = RoxouColors.TextSecondary,
-                    uncheckedTrackColor = RoxouColors.Track,
-                    uncheckedBorderColor = RoxouColors.CardBorder,
-                ),
-            )
-        }
-
-        // Notificação da corrida (reserva)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SecaoCabecalho(
-                titulo = "Notificação da corrida",
-                explicacao = "Embarque e Destino na barra de cima, a qualquer hora",
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(modifier = Modifier.width(RoxouSpacing.sm))
-            Switch(
-                checked = notificacao,
-                onCheckedChange = onNotificacao,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = RoxouColors.Purple,
-                    uncheckedThumbColor = RoxouColors.TextSecondary,
-                    uncheckedTrackColor = RoxouColors.Track,
-                    uncheckedBorderColor = RoxouColors.CardBorder,
-                ),
-            )
+        // BLOCO 3: Mapa
+        BlocoAjustes(titulo = "Mapa") {
+            Column(verticalArrangement = Arrangement.spacedBy(RoxouSpacing.sm)) {
+                OpcaoTituloComInfo(
+                    titulo = "App de navegação",
+                    onInfo = {
+                        ajudaAberta = AjudaJanela(
+                            titulo = "App de navegação",
+                            explicacao = "Define qual mapa abre quando você toca em Embarque ou Destino na janela flutuante.",
+                        )
+                    },
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
+                ) {
+                    mapas.forEach { nome ->
+                        OpcaoBotao(
+                            texto = nome,
+                            selecionado = mapaPadrao.equals(nome, ignoreCase = true),
+                            onClick = { onMapaPadrao(nome) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
         }
 
         // Botão concluir
@@ -321,15 +372,90 @@ private fun JanelaAjustesConteudo(
             )
         }
     }
+
+    ajudaAberta?.let { ajuda ->
+        AlertDialog(
+            onDismissRequest = { ajudaAberta = null },
+            containerColor = RoxouColors.SurfaceElevated,
+            titleContentColor = RoxouColors.TextPrimary,
+            textContentColor = RoxouColors.TextSecondary,
+            title = {
+                Text(
+                    text = ajuda.titulo,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            text = {
+                Text(
+                    text = ajuda.explicacao,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = RoxouColors.TextSecondary,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { ajudaAberta = null }) {
+                    Text(
+                        text = "Entendi",
+                        color = RoxouColors.PurpleSoft,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+            },
+        )
+    }
 }
 
 @Composable
-private fun SecaoCabecalho(
+private fun BlocoAjustes(
     titulo: String,
-    explicacao: String,
+    conteudo: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
+    ) {
+        Text(
+            text = titulo,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = RoxouColors.PurpleSoft,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.padding(horizontal = RoxouSpacing.xs),
+        )
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            color = RoxouColors.Background,
+            border = BorderStroke(1.dp, RoxouColors.CardBorder),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(RoxouSpacing.md),
+                verticalArrangement = Arrangement.spacedBy(RoxouSpacing.md),
+            ) {
+                conteudo()
+            }
+        }
+    }
+}
+
+@Composable
+private fun OpcaoTituloComInfo(
+    titulo: String,
+    onInfo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
             text = titulo,
             style = MaterialTheme.typography.titleMedium,
@@ -337,15 +463,19 @@ private fun SecaoCabecalho(
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
         )
-        Text(
-            text = explicacao,
-            style = MaterialTheme.typography.labelMedium,
-            color = RoxouColors.TextSecondary,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-        )
+        IconButton(
+            onClick = onInfo,
+            modifier = Modifier.size(48.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Info,
+                contentDescription = "Explicação de $titulo",
+                tint = RoxouColors.TextMuted,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }
 
@@ -358,7 +488,7 @@ private fun PosicaoCelularOpcao(
     modifier: Modifier = Modifier,
 ) {
     val bg by animateColorAsState(
-        targetValue = if (selecionado) RoxouColors.PurpleSurface else RoxouColors.Background,
+        targetValue = if (selecionado) RoxouColors.PurpleSurface else RoxouColors.SurfaceCard,
         label = "pos_bg",
     )
     val borda by animateColorAsState(
@@ -384,16 +514,14 @@ private fun PosicaoCelularOpcao(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(RoxouSpacing.sm),
         ) {
-            // Desenho pequeno do celular mostrando onde a janela flutuante fica
             Box(
                 modifier = Modifier
                     .width(42.dp)
                     .height(64.dp)
                     .clip(RoundedCornerShape(9.dp))
-                    .background(RoxouColors.SurfaceCard)
+                    .background(RoxouColors.Background)
                     .padding(3.dp),
             ) {
-                // Topo do celular (alto-falante)
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -403,7 +531,6 @@ private fun PosicaoCelularOpcao(
                         .clip(CircleShape)
                         .background(RoxouColors.Track),
                 )
-                // Janelinha flutuante posicionada
                 Box(
                     modifier = Modifier
                         .align(alinhamento)
@@ -435,7 +562,7 @@ private fun OpcaoBotao(
     modifier: Modifier = Modifier,
 ) {
     val bg by animateColorAsState(
-        targetValue = if (selecionado) RoxouColors.Purple else RoxouColors.Background,
+        targetValue = if (selecionado) RoxouColors.Purple else RoxouColors.SurfaceCard,
         label = "opcao_bg",
     )
     val borda by animateColorAsState(
@@ -471,11 +598,11 @@ private fun OpcaoBotao(
 }
 
 @Preview(
-    name = "Ajustes da janela flutuante",
+    name = "Ajustes da janela flutuante - 3 blocos",
     showBackground = true,
     backgroundColor = 0xFF1E1A26,
     widthDp = 360,
-    heightDp = 640,
+    heightDp = 820,
 )
 @Composable
 private fun JanelaAjustesSheetPreview() {
@@ -486,10 +613,14 @@ private fun JanelaAjustesSheetPreview() {
                 segundos = 5,
                 notaMinima = 4.80,
                 wazeDepoisDoAceite = true,
+                perguntarAceite = true,
+                mapaPadrao = "Waze",
                 onPosicao = {},
                 onSegundos = {},
                 onNotaMinima = {},
                 onWaze = {},
+                onPerguntarAceite = {},
+                onMapaPadrao = {},
                 onFechar = {},
             )
         }

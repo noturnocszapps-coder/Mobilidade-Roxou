@@ -2,19 +2,35 @@ package br.com.roxou.mobilidade.design
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
@@ -38,6 +55,9 @@ fun PainelScreen(
     ui: PainelUi,
     modifier: Modifier = Modifier,
     onAbrirFinancas: () -> Unit = {},
+    radarEstado: String = "Lendo ofertas",
+    onArrumarRadar: () -> Unit = {},
+    onAbrirDiagnostico: () -> Unit = {},
 ) {
     val mostrarParcela = ui.recursos.locacao && ui.parcelaFaltaCentavos != null
     val mostrarLivre = ui.recursos.financas
@@ -49,22 +69,29 @@ fun PainelScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = RoxouSpacing.lg, vertical = RoxouSpacing.xl)
                 .animateContentSize(),
             verticalArrangement = Arrangement.spacedBy(RoxouSpacing.lg),
         ) {
             TopHeader(diaTexto = ui.diaTexto)
 
-            // Bloco 1: Corridas de hoje (sempre visível)
+            // Topo: Cartão do Radar com estado e link discreto "Diagnóstico"
+            RadarCard(
+                estado = radarEstado,
+                onArrumar = onArrumarRadar,
+                onAbrirDiagnostico = onAbrirDiagnostico,
+            )
+
+            // Meta do dia em número grande: "7 de 18 corridas" + "Uber 5 · 99 2"
             CorridasHojeCard(
                 corridasHoje = ui.corridasHoje,
                 metaHoje = if (ui.recursos.metaDiaria) ui.metaHoje else 0,
                 corridasUberHoje = ui.corridasUberHoje,
                 corridas99Hoje = ui.corridas99Hoje,
-                faturadoHojeCentavos = ui.faturadoHojeCentavos,
             )
 
-            // Bloco 2: Meta da locadora (só se recursos.metaLocadora)
+            // Meta da locadora (só Uber) separada e menor
             if (ui.recursos.metaLocadora) {
                 MetaLocadoraCard(
                     corridasSemanaUber = ui.corridasSemanaUber,
@@ -74,7 +101,7 @@ fun PainelScreen(
                 )
             }
 
-            // Bloco 3: Parcela e/ou Dinheiro livre
+            // Parcela e/ou Dinheiro livre
             if (mostrarParcela || mostrarLivre) {
                 FinanceiroBloco(
                     mostrarParcela = mostrarParcela,
@@ -82,6 +109,157 @@ fun PainelScreen(
                     mostrarLivre = mostrarLivre,
                     dinheiroLivreCentavos = ui.dinheiroLivreCentavos,
                     onAbrirFinancas = onAbrirFinancas,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RadarCard(
+    estado: String,
+    onArrumar: () -> Unit,
+    onAbrirDiagnostico: () -> Unit,
+) {
+    val norm = estado.trim().lowercase()
+    val faltaPermissao = norm.contains("permiss") || norm.contains("falta")
+    val desligado = norm.contains("deslig")
+    val lendo = !faltaPermissao && !desligado
+
+    val corDestaque = when {
+        faltaPermissao -> RoxouColors.Red
+        desligado -> RoxouColors.TextMuted
+        else -> RoxouColors.Purple
+    }
+    val corBorda = when {
+        faltaPermissao -> RoxouColors.Red.copy(alpha = 0.55f)
+        desligado -> RoxouColors.CardBorder
+        else -> RoxouColors.Purple.copy(alpha = 0.55f)
+    }
+    val corTextoEstado = when {
+        faltaPermissao -> RoxouColors.Red
+        desligado -> RoxouColors.TextSecondary
+        else -> RoxouColors.TextPrimary
+    }
+
+    val pulsoTransicao = rememberInfiniteTransition(label = "radar_pulso")
+    val alfaPulso by pulsoTransicao.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 850),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "radar_alfa",
+    )
+
+    RoxouCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = RoxouSpacing.lg,
+        borderColor = corBorda,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(RoxouSpacing.md),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    // Indicador de estado (pulsa em roxo quando "Lendo ofertas")
+                    Box(
+                        modifier = Modifier.size(20.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (lendo) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .alpha(alfaPulso * 0.4f)
+                                    .clip(CircleShape)
+                                    .background(RoxouColors.Purple),
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .alpha(if (lendo) (0.65f + alfaPulso * 0.35f) else 1f)
+                                .clip(CircleShape)
+                                .background(corDestaque),
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "Radar",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = RoxouColors.TextSecondary,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                        Text(
+                            text = estado,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = corTextoEstado,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                if (faltaPermissao) {
+                    Button(
+                        onClick = onArrumar,
+                        shape = RoundedCornerShape(RoxouRadius.sm),
+                        contentPadding = PaddingValues(horizontal = RoxouSpacing.md),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = RoxouColors.Red,
+                            contentColor = Color.White,
+                        ),
+                        modifier = Modifier.height(48.dp),
+                    ) {
+                        Text(
+                            text = "Arrumar",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(RoxouSpacing.md))
+            HorizontalDivider(thickness = 1.dp, color = RoxouColors.Divider)
+
+            // Rodapé discreto com link "Diagnóstico" (área de toque mínima de 48 dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(RoxouRadius.sm))
+                    .clickable(onClick = onAbrirDiagnostico)
+                    .padding(horizontal = RoxouSpacing.xs),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Diagnóstico",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = RoxouColors.TextMuted,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowRight,
+                    contentDescription = "Abrir diagnóstico",
+                    tint = RoxouColors.TextMuted,
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -136,7 +314,6 @@ private fun CorridasHojeCard(
     metaHoje: Int,
     corridasUberHoje: Int,
     corridas99Hoje: Int,
-    faturadoHojeCentavos: Long,
 ) {
     val temMeta = metaHoje > 0
     val metaBatida = temMeta && corridasHoje >= metaHoje
@@ -161,7 +338,7 @@ private fun CorridasHojeCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Corridas hoje",
+                    text = "Meta do dia",
                     style = MaterialTheme.typography.labelMedium,
                     color = RoxouColors.TextSecondary,
                     maxLines = 1,
@@ -185,40 +362,42 @@ private fun CorridasHojeCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(RoxouSpacing.md))
+            Spacer(modifier = Modifier.height(RoxouSpacing.sm))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Text(
-                    text = corridasHoje.toString(),
-                    style = MaterialTheme.typography.displayLarge,
-                    color = RoxouColors.TextPrimary,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.alignByBaseline(),
-                )
-
-                if (temMeta) {
-                    Text(
-                        text = " de $metaHoje",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = RoxouColors.TextSecondary,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .padding(start = RoxouSpacing.xs)
-                            .alignByBaseline(),
-                    )
-                }
-            }
+            // Número grande: "7 de 18 corridas"
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(
+                        SpanStyle(
+                            color = RoxouColors.TextPrimary,
+                            fontSize = 44.sp,
+                            fontWeight = FontWeight.Bold,
+                        ),
+                    ) {
+                        append(corridasHoje.toString())
+                    }
+                    withStyle(
+                        SpanStyle(
+                            color = RoxouColors.TextSecondary,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                    ) {
+                        if (temMeta) {
+                            append(" de $metaHoje corridas")
+                        } else {
+                            append(if (corridasHoje == 1) " corrida" else " corridas")
+                        }
+                    }
+                },
+                style = MaterialTheme.typography.headlineLarge,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
 
             if (temMeta) {
-                Spacer(modifier = Modifier.height(RoxouSpacing.lg))
+                Spacer(modifier = Modifier.height(RoxouSpacing.md))
                 RoxouBarraProgresso(
                     progress = progresso,
                     height = 8.dp,
@@ -226,14 +405,10 @@ private fun CorridasHojeCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(RoxouSpacing.lg))
+            Spacer(modifier = Modifier.height(RoxouSpacing.md))
 
             Text(
-                text = if (corridasHoje == 0 && faturadoHojeCentavos == 0L) {
-                    "Uber 0 · 99 0 · R$ 0"
-                } else {
-                    "Uber $corridasUberHoje · 99 $corridas99Hoje · ${formatarReais(faturadoHojeCentavos)}"
-                },
+                text = "Uber $corridasUberHoje · 99 $corridas99Hoje",
                 style = MaterialTheme.typography.bodyMedium,
                 color = RoxouColors.TextSecondary,
                 maxLines = 1,
@@ -255,7 +430,7 @@ private fun MetaLocadoraCard(
 
     RoxouCard(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = RoxouSpacing.lg,
+        contentPadding = RoxouSpacing.md,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -264,7 +439,7 @@ private fun MetaLocadoraCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Meta da locadora",
+                    text = "Meta da locadora · só Uber",
                     style = MaterialTheme.typography.labelMedium,
                     color = RoxouColors.TextSecondary,
                     maxLines = 1,
@@ -284,23 +459,24 @@ private fun MetaLocadoraCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(RoxouSpacing.md))
+            Spacer(modifier = Modifier.height(RoxouSpacing.sm))
 
             if (bateuUltima) {
                 Text(
                     text = "Faixa máxima: ${formatarReais(descontoGarantidoCentavos)}",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     color = RoxouColors.Green,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                 )
 
-                Spacer(modifier = Modifier.height(RoxouSpacing.md))
+                Spacer(modifier = Modifier.height(RoxouSpacing.sm))
 
                 RoxouBarraProgresso(
                     progress = 1f,
-                    height = 6.dp,
+                    height = 5.dp,
                     fillColor = RoxouColors.Green,
                 )
             } else {
@@ -321,17 +497,18 @@ private fun MetaLocadoraCard(
                             append(formatarReais(desconto))
                         }
                     },
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                 )
 
-                Spacer(modifier = Modifier.height(RoxouSpacing.md))
+                Spacer(modifier = Modifier.height(RoxouSpacing.sm))
 
                 RoxouBarraProgresso(
                     progress = progresso,
-                    height = 6.dp,
+                    height = 5.dp,
                     fillColor = RoxouColors.Purple,
                 )
             }
@@ -436,11 +613,11 @@ private fun ValorCard(
 }
 
 @Preview(
-    name = "Painel - Completo",
+    name = "Painel - Radar lendo ofertas",
     showBackground = true,
     backgroundColor = 0xFF121016,
     widthDp = 360,
-    heightDp = 760,
+    heightDp = 780,
 )
 @Composable
 private fun PainelScreenPreview() {
@@ -448,11 +625,11 @@ private fun PainelScreenPreview() {
         PainelScreen(
             ui = PainelUi(
                 diaTexto = "Sex 27/11",
-                corridasHoje = 12,
+                corridasHoje = 7,
                 metaHoje = 18,
-                corridasUberHoje = 12,
-                corridas99Hoje = 0,
-                faturadoHojeCentavos = 23000L,
+                corridasUberHoje = 5,
+                corridas99Hoje = 2,
+                faturadoHojeCentavos = 14800L,
                 corridasSemanaUber = 54,
                 proximaFaixaCorridas = 60,
                 proximaFaixaDescontoCentavos = 16000L,
@@ -467,19 +644,57 @@ private fun PainelScreenPreview() {
                     janelaFlutuante = true,
                 ),
             ),
+            radarEstado = "Lendo ofertas",
         )
     }
 }
 
 @Preview(
-    name = "Painel - Dia zerado / carro próprio",
+    name = "Painel - Radar falta permissão",
     showBackground = true,
     backgroundColor = 0xFF121016,
     widthDp = 360,
-    heightDp = 760,
+    heightDp = 780,
 )
 @Composable
-private fun PainelScreenVazioPreview() {
+private fun PainelScreenPermissaoPreview() {
+    RoxouDesignTheme {
+        PainelScreen(
+            ui = PainelUi(
+                diaTexto = "Sex 27/11",
+                corridasHoje = 7,
+                metaHoje = 18,
+                corridasUberHoje = 5,
+                corridas99Hoje = 2,
+                faturadoHojeCentavos = 14800L,
+                corridasSemanaUber = 54,
+                proximaFaixaCorridas = 60,
+                proximaFaixaDescontoCentavos = 16000L,
+                descontoGarantidoCentavos = 8000L,
+                parcelaFaltaCentavos = null,
+                dinheiroLivreCentavos = 23000L,
+                recursos = Recursos(
+                    metaLocadora = true,
+                    locacao = false,
+                    financas = true,
+                    metaDiaria = true,
+                    janelaFlutuante = true,
+                ),
+            ),
+            radarEstado = "Falta permissão",
+        )
+    }
+}
+
+@Preview(
+    name = "Painel - Radar desligado",
+    showBackground = true,
+    backgroundColor = 0xFF121016,
+    widthDp = 360,
+    heightDp = 780,
+)
+@Composable
+private fun PainelScreenDesligadoPreview() {
     RoxouDesignTheme {
         PainelScreen(
             ui = PainelUi(
@@ -499,10 +714,11 @@ private fun PainelScreenVazioPreview() {
                     metaLocadora = false,
                     locacao = false,
                     financas = true,
-                    metaDiaria = false,
+                    metaDiaria = true,
                     janelaFlutuante = true,
                 ),
             ),
+            radarEstado = "Desligado",
         )
     }
 }

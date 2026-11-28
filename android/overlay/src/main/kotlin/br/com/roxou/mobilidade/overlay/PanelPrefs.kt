@@ -29,6 +29,10 @@ object PanelPrefs {
     fun setRideNotification(c: Context, v: Boolean) = p(c).edit().putBoolean("ride_notification", v).apply()
 
     /** Depois do aceite, deixa um botãozinho do Waze (embarque/destino) na tela. */
+    /** Quando o aceite não é visto, pergunta "Aceitou esta corrida?" (Ajustes da janela). */
+    fun askAccept(c: Context): Boolean = p(c).getBoolean("ask_accept", true)
+    fun setAskAccept(c: Context, v: Boolean) = p(c).edit().putBoolean("ask_accept", v).apply()
+
     fun wazeAfterAccept(c: Context): Boolean = p(c).getBoolean("waze_after_accept", true)
     fun setWazeAfterAccept(c: Context, v: Boolean) = p(c).edit().putBoolean("waze_after_accept", v).apply()
 }

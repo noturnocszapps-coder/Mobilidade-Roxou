@@ -393,7 +393,7 @@ class OfferReaderService : AccessibilityService() {
                         record(OfferOutcome.REJECTED)
                         // Pode ter aceitado numa tela que o app não conhece: deixa Embarque/Destino e o ✔
                         // por alguns segundos. Tocar em um deles conta como aceite.
-                        panel?.maybeAccepted()
+                        if (PanelPrefs.askAccept(this)) panel?.maybeAccepted()
                     }
                 }
             }

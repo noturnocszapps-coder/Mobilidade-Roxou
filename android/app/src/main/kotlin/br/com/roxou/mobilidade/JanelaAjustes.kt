@@ -88,8 +88,7 @@ fun JanelaAjustesDialog(repo: RoxouRepository, notaMinima: Double, onFechar: () 
     var waze by remember { mutableStateOf(PanelPrefs.wazeAfterAccept(context)) }
     var nota by remember { mutableStateOf(notaMinima) }
     var mapa by remember { mutableStateOf(PanelPrefs.mapApp(context)) }
-    var notificacao by remember { mutableStateOf(PanelPrefs.rideNotification(context)) }
-    val pedirNotificacao = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    var perguntar by remember { mutableStateOf(PanelPrefs.askAccept(context)) }
 
     JanelaAjustesSheet(
         posicao = posicao.ordinal,
@@ -104,13 +103,11 @@ fun JanelaAjustesDialog(repo: RoxouRepository, notaMinima: Double, onFechar: () 
         },
         onWaze = { waze = it; PanelPrefs.setWazeAfterAccept(context, it) },
         onFechar = onFechar,
-        mapa = mapa.ordinal,
-        onMapa = { i -> Waze.MapApp.entries.getOrNull(i)?.let { mapa = it; PanelPrefs.setMapApp(context, it) } },
-        notificacao = notificacao,
-        onNotificacao = {
-            notificacao = it
-            PanelPrefs.setRideNotification(context, it)
-            if (it && Build.VERSION.SDK_INT >= 33) pedirNotificacao.launch(Manifest.permission.POST_NOTIFICATIONS)
+        perguntarAceite = perguntar,
+        onPerguntarAceite = { perguntar = it; PanelPrefs.setAskAccept(context, it) },
+        mapaPadrao = mapa.label,
+        onMapaPadrao = { nome ->
+            Waze.MapApp.entries.firstOrNull { it.label.equals(nome, ignoreCase = true) }?.let { mapa = it; PanelPrefs.setMapApp(context, it) }
         },
     )
 }
